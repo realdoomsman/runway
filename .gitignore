@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+data/
+*.log
+.DS_Store
+coverage/
+.vite/
+apps/api/drizzle/meta/_journal.json.bak
