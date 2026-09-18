@@ -1,5 +1,7 @@
 # RUNWAY — Technical Specification (v1)
 
+> **SUPERSEDED.** `docs/SPEC-V2.md` is the canonical contract; it overrides this document wherever they conflict.
+
 Status: canonical contract for the v1 build. Every module implements exactly what is here. If something is missing, the implementer picks the simplest option consistent with this document and notes it in `docs/DECISIONS.md`.
 
 ## 0. One-paragraph product

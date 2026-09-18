@@ -1,0 +1,193 @@
+/* ============================================================
+   RUNWAY — Spawn / Market / Protocol page primitives.
+   Appended to the design system; nothing in global.css is restyled.
+   ============================================================ */
+
+/* ---------- labelled status rows (spawn step 1, protocol chain block) ---------- */
+
+.gate-row {
+  display: grid;
+  grid-template-columns: 158px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.gate-row:last-child { border-bottom: none; }
+.gate-row .g-k { font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+.gate-row .g-v { color: var(--dim); min-width: 0; overflow-wrap: anywhere; }
+.gate-row .g-v b { color: var(--ink); font-weight: 500; }
+.gate-row .g-a { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+@media (max-width: 700px) {
+  .gate-row { grid-template-columns: 1fr; gap: 4px; }
+  .gate-row .g-a { justify-content: flex-start; }
+}
+
+/* ---------- form rows ---------- */
+
+.form-row { margin-bottom: 16px; }
+.form-row:last-child { margin-bottom: 0; }
+.form-row .fl {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase;
+}
+.form-row .fl .spacer { flex: 1; }
+.form-hint { font-size: 10.5px; color: var(--faint); margin-top: 5px; line-height: 1.6; }
+.form-hint.warn { color: var(--amber); }
+.form-err { font-size: 10.5px; color: var(--red); margin-top: 5px; line-height: 1.6; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 800px) { .form-grid { grid-template-columns: 1fr; } }
+.field-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Card grids whose cards are real <button>s: undo the UA button defaults only. */
+button.tool-card,
+button.tier-card {
+  display: block; width: 100%; text-align: left;
+  font-family: var(--mono); font-size: inherit; color: inherit;
+}
+button.tool-card:disabled,
+button.tier-card:disabled { opacity: 0.4; cursor: not-allowed; }
+
+textarea.finput, select.finput, input.finput.full { width: 100%; }
+
+/* ---------- code / output blocks ---------- */
+
+.code-block {
+  border: 1px solid var(--line2); background: var(--panel2);
+  padding: 10px 12px; font-family: var(--mono); font-size: 10.5px; color: var(--dim);
+  white-space: pre; overflow-x: auto; line-height: 1.7;
+}
+.code-block.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- expandable table detail row ---------- */
+
+.tbl td.detail-cell { background: var(--panel2); padding: 14px; }
+.detail-block { font-size: 11.5px; color: var(--dim); line-height: 1.7; }
+.detail-block .db-title { font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; margin-bottom: 5px; }
+.detail-block + .detail-block { margin-top: 12px; }
+
+/* ---------- protocol: how it works ---------- */
+
+.proto-flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 1100px) { .proto-flow { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .proto-flow { grid-template-columns: 1fr; } }
+.pf-step { border: 1px solid var(--line2); background: var(--panel2); padding: 12px 14px; }
+.pf-num { font-size: 10px; letter-spacing: 0.14em; color: var(--faint); }
+.pf-t { font-family: var(--disp); font-weight: 700; font-size: 14px; color: var(--ink-strong); letter-spacing: 0.06em; margin-top: 3px; }
+.pf-d { font-size: 11px; color: var(--dim); line-height: 1.7; margin-top: 7px; }
+
+/* ============================================================
+   v2 — Buy / Pending / Claim primitives (SPEC-V2 §9.4–§9.6)
+   Appended to the design system; nothing above is restyled.
+   ============================================================ */
+
+/* ---------- amount box ---------- */
+
+.buy-amount { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.buy-amount .ba-dollar {
+  font-family: var(--disp); font-weight: 700; font-size: 26px; color: var(--dim); line-height: 1;
+}
+input.finput.ba-input {
+  font-family: var(--disp); font-weight: 700; font-size: 26px; letter-spacing: 0.04em;
+  color: var(--ink-strong); background: var(--panel2);
+  padding: 8px 12px; width: 180px;
+}
+.buy-amount .ba-chips { margin-bottom: 0; }
+
+.buy-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 22px; margin-top: 12px; background: none; cursor: pointer;
+}
+.buy-slider::-webkit-slider-runnable-track { height: 4px; background: var(--line2); }
+.buy-slider::-moz-range-track { height: 4px; background: var(--line2); }
+.buy-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 10px; height: 20px; margin-top: -8px;
+  background: var(--green); border: none; border-radius: 0;
+}
+.buy-slider::-moz-range-thumb { width: 10px; height: 20px; background: var(--green); border: none; border-radius: 0; }
+.buy-slider:focus-visible { outline: 1px solid var(--dim); outline-offset: 3px; }
+
+/* ---------- tier banner ---------- */
+
+.buy-tier-banner {
+  border: 1px solid var(--line2); border-left: 2px solid var(--green);
+  background: var(--panel2); padding: 11px 13px; margin: 14px 0;
+}
+.buy-tier-banner .btb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.buy-tier-banner .btb-name {
+  font-family: var(--disp); font-weight: 700; font-size: 16px; letter-spacing: 0.08em; color: var(--ink-strong);
+}
+.buy-tier-banner .btb-blurb { margin-top: 7px; font-size: 11.5px; color: var(--dim); line-height: 1.7; }
+
+/* ---------- pace ---------- */
+
+.seg.pace-seg button { padding: 7px 16px; }
+
+/* ---------- pay step ---------- */
+
+.buy-pay-grid { align-items: stretch; }
+.buy-pay-card { display: flex; flex-direction: column; }
+.buy-pay-card .btn-primary, .buy-pay-card .btn-ghost { width: 100%; }
+
+/* ---------- pending status line ---------- */
+
+.buy-status {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--line2); background: var(--panel2);
+  padding: 13px 16px;
+  font-family: var(--disp); font-weight: 700; font-size: 14px; letter-spacing: 0.08em;
+  color: var(--ink-strong); text-transform: uppercase;
+}
+.buy-status.pos { border-color: rgba(47, 230, 160, 0.45); color: var(--green); }
+.buy-status.warn { border-color: rgba(240, 178, 62, 0.45); color: var(--amber); }
+.buy-status.neg { border-color: rgba(240, 87, 77, 0.45); color: var(--red); }
+
+/* ---------- deposit address ---------- */
+
+.deposit-address { border: 1px solid var(--line2); background: var(--panel2); padding: 14px 16px; }
+.deposit-address .da-label { font-size: 10px; letter-spacing: 0.16em; color: var(--faint); text-transform: uppercase; }
+.deposit-address .da-key {
+  margin-top: 8px;
+  font-family: var(--mono); font-size: 15px; letter-spacing: 0.02em; line-height: 1.5;
+  color: var(--ink-strong); word-break: break-all; user-select: all;
+}
+.deposit-address .da-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.deposit-address .da-facts {
+  display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px;
+  padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 11px; color: var(--dim);
+}
+.deposit-address .daf { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.deposit-address .daf .k { font-size: 10px; letter-spacing: 0.12em; color: var(--faint); }
+.deposit-address .daf b { color: var(--ink); font-weight: 500; }
+.deposit-address .da-mint b { overflow-wrap: anywhere; font-size: 10.5px; }
+
+@media (max-width: 700px) { .deposit-address .da-key { font-size: 12px; } }
+
+/* ---------- claim code, shown once ---------- */
+
+.claim-code { border: 1px solid rgba(240, 178, 62, 0.45); background: rgba(240, 178, 62, 0.05); padding: 16px; }
+.claim-code .cc-warn {
+  font-size: 10px; letter-spacing: 0.14em; color: var(--amber); text-transform: uppercase; line-height: 1.7;
+}
+.claim-code .cc-code {
+  margin-top: 12px;
+  font-family: var(--mono); font-size: 21px; letter-spacing: 0.14em; line-height: 1.5;
+  color: var(--ink-strong); word-break: break-all; user-select: all;
+}
+.claim-code .cc-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.claim-code .cc-check {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--dim); cursor: pointer;
+}
+.claim-code .cc-check input { accent-color: var(--green); width: 14px; height: 14px; cursor: pointer; }
+
+@media (max-width: 700px) { .claim-code .cc-code { font-size: 15px; letter-spacing: 0.08em; } }
+
+input.finput.claim-input {
+  font-family: var(--mono); font-size: 15px; letter-spacing: 0.1em;
+  padding: 9px 12px; min-width: 300px; flex: 1;
+}

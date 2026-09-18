@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789589380288,
+      "tag": "0000_odd_paibok",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789614470102,
+      "tag": "0001_gifted_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789622909949,
+      "tag": "0002_uneven_reptil",
+      "breakpoints": true
+    }
+  ]
+}
