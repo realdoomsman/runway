@@ -66,7 +66,7 @@ describe('thinking round trip across 3 rounds', () => {
   });
 
   it('drops thinking blocks on the chat providers (A1)', () => {
-    const params = buildChatRequest(makeRequest({ model: terra.id, messages }), terra, { includeUsage: false });
+    const params = buildChatRequest(makeRequest({ model: terra.id, messages }), terra);
     expect(JSON.stringify(params.messages)).not.toContain('sig-1');
     expect(JSON.stringify(params.messages)).not.toContain('redacted-2');
     expect(JSON.stringify(params.messages)).not.toContain('weigh the cost');

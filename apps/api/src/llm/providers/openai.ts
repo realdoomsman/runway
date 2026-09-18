@@ -8,5 +8,5 @@ export interface OpenAiProviderOpts { apiKey: string; client?: OpenAI }
 // catalog with the cached prompt subset at the cache-read rate (AMENDMENTS A5).
 export function createOpenAiProvider(opts: OpenAiProviderOpts): LlmProvider {
   const client = opts.client ?? new OpenAI({ apiKey: opts.apiKey, maxRetries: 0 });
-  return createChatProvider({ name: 'openai', client, includeUsage: false, costFromUsage: false });
+  return createChatProvider({ name: 'openai', client, costFromUsage: false });
 }

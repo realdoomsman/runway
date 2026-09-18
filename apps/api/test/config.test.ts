@@ -4,6 +4,14 @@ import { DEPOSIT_POLL_MS_DEFAULT, loadConfig, USDC_MINTS, describeConfig } from 
 
 const base = { NODE_ENV: 'development' } as NodeJS.ProcessEnv;
 
+/** Everything CHAIN_MODE=solana requires, so a test can break exactly one thing at a time. */
+const solanaEnv = (over: Record<string, string> = {}): NodeJS.ProcessEnv => ({
+  ...base,
+  CHAIN_MODE: 'solana', SOLANA_RPC_URL: 'https://api.devnet.solana.com',
+  TREASURY_WALLET_SECRET: 't', ESCROW_WALLET_SECRET: 'e', PROTOCOL_FEE_WALLET: 'p', FOUNDER_FEE_WALLET: 'f',
+  ...over,
+});
+
 describe('loadConfig', () => {
   it('applies dev defaults and warns about insecure fallbacks', () => {
     const c = loadConfig(base);
@@ -35,12 +43,17 @@ describe('loadConfig', () => {
   });
 
   it('polls the chain less often when the RPC costs money', () => {
-    const solana = {
-      ...base, CHAIN_MODE: 'solana', TREASURY_WALLET_SECRET: 't', ESCROW_WALLET_SECRET: 'e',
-      PROTOCOL_FEE_WALLET: 'p', FOUNDER_FEE_WALLET: 'f',
-    };
-    expect(loadConfig(solana).economy.depositPollMs).toBe(DEPOSIT_POLL_MS_DEFAULT.solana);
-    expect(loadConfig({ ...solana, DEPOSIT_POLL_MS: '4000' }).economy.depositPollMs).toBe(4000);
+    expect(loadConfig(solanaEnv()).economy.depositPollMs).toBe(DEPOSIT_POLL_MS_DEFAULT.solana);
+    expect(loadConfig(solanaEnv({ DEPOSIT_POLL_MS: '4000' })).economy.depositPollMs).toBe(4000);
+  });
+
+  // The schema default for SOLANA_RPC_URL is a devnet endpoint. Inheriting it while asking for a real
+  // chain is how a mainnet deployment quietly reads devnet, so solana mode has to name the endpoint.
+  it('refuses CHAIN_MODE=solana that never named an RPC endpoint', () => {
+    const { SOLANA_RPC_URL: _omitted, ...withoutRpc } = solanaEnv();
+    expect(() => loadConfig(withoutRpc)).toThrow(/SOLANA_RPC_URL is required when CHAIN_MODE=solana/);
+    expect(loadConfig(solanaEnv()).chain.rpcUrl).toBe('https://api.devnet.solana.com');
+    expect(loadConfig(base).chain.rpcUrl).toBe('https://api.devnet.solana.com');   // memory mode never reads it
   });
 
   it('refuses the local sandbox in production', () => {

@@ -59,18 +59,26 @@ export interface UsageTokens {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  // Subset of `cacheWriteTokens` written at the 1-hour TTL. Anthropic bills a 1h cache write at 2×
+  // base input, a 5m write at 1.25×, and reports the split in `usage.cache_creation`. Omitted (or 0)
+  // means the whole write was at the 5-minute rate — which is what every non-Anthropic provider does.
+  cacheWrite1hTokens?: number;
 }
 
-export type ModelPricing = Pick<ModelInfo, 'inputPerM' | 'outputPerM' | 'cacheReadPerM' | 'cacheWritePerM'>;
+export type ModelPricing = Pick<ModelInfo, 'inputPerM' | 'outputPerM' | 'cacheReadPerM' | 'cacheWritePerM' | 'cacheWrite1hPerM'>;
 
 export const cacheReadPerM = (m: ModelPricing): number => m.cacheReadPerM ?? m.inputPerM * 0.1;
 export const cacheWritePerM = (m: ModelPricing): number => m.cacheWritePerM ?? m.inputPerM * 1.25;
+export const cacheWrite1hPerM = (m: ModelPricing): number => m.cacheWrite1hPerM ?? m.inputPerM * 2;
 
 // Cost of one completion in micro-dollars (AMENDMENTS A5).
 export function priceUsage(model: ModelPricing, usage: UsageTokens): Micro {
+  const write1h = Math.min(Math.max(usage.cacheWrite1hTokens ?? 0, 0), usage.cacheWriteTokens);
+  const write5m = usage.cacheWriteTokens - write1h;
   return ceilMicro(
     usage.inputTokens * model.inputPerM +
-      usage.cacheWriteTokens * cacheWritePerM(model) +
+      write5m * cacheWritePerM(model) +
+      write1h * cacheWrite1hPerM(model) +
       usage.cacheReadTokens * cacheReadPerM(model) +
       usage.outputTokens * model.outputPerM,
   );

@@ -117,9 +117,19 @@ own loopback. The other half is a host firewall rule Docker cannot express. Inst
 
 ```sh
 # `apps/api/src/sandbox/egress.ts` prints the current rules; they are also logged at boot when the ack is missing.
-iptables  -I DOCKER-USER -i br-runway-agents -d 0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.168.0.0/16,198.18.0.0/15,224.0.0.0/4,240.0.0.0/4 -j DROP
-ip6tables -I DOCKER-USER -i br-runway-agents -d ::1/128,fc00::/7,fe80::/10,ff00::/8 -j DROP
+iptables -I DOCKER-USER -i br-runway-agent -d 0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.0.0.0/24,192.168.0.0/16,198.18.0.0/15,224.0.0.0/4,240.0.0.0/4 -j DROP
+ip6tables -I DOCKER-USER -i br-runway-agent -d ::1/128,fc00::/7,fe80::/10,ff00::/8 -j DROP
 ```
+
+The interface is `br-runway-agent`, not `br-runway-agents`: Linux caps an interface name at 15 characters, so the
+bridge for the default `runway-agents` network loses its last letter. A rule naming a 16-character interface matches
+nothing and drops nothing, which looks exactly like a working rule — `apps/api/test/sandbox/egress.test.ts` asserts the
+two lines above are byte-for-byte what `egressFirewallRules()` emits, so they cannot drift again. Verify after
+installing: `iptables -S DOCKER-USER | grep br-runway-agent` and `ip link show br-runway-agent`.
+
+If you change `SANDBOX_NETWORK`, re-read the rule from the code rather than editing the lines above by hand; two
+network names that share their first 12 characters truncate to the same bridge and the daemon rejects the second
+network with a 403.
 
 Hosted agent sites are served with a CSP `sandbox` directive (no `allow-same-origin`), so their JavaScript cannot use a
 visitor's session against the API. Point `SITES_BASE_URL` at a hostname the `rw_session` cookie is not scoped to anyway:

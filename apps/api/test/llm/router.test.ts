@@ -175,7 +175,7 @@ describe('refreshPricing (A5)', () => {
     const fetchImpl = (async () => { throw new Error('offline'); }) as unknown as typeof fetch;
     const router = createRouter({ config: orConfig(), log: silentLogger, fetchImpl });
     await expect(router.refreshPricing()).resolves.toBeUndefined();
-    expect(router.models().find((m) => m.id === 'moonshotai/kimi-k2')?.inputPerM).toBe(0.5);
+    expect(router.models().find((m) => m.id === 'moonshotai/kimi-k2')?.inputPerM).toBe(0.57);
   });
 
   it('is a no-op without an openrouter key', async () => {

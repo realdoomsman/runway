@@ -170,6 +170,16 @@ async function drive(deps: Deps, start: AgentRow, step: StepRow, opts: DriveOpti
         error = res.stopDetails?.explanation ?? 'provider error';
         break;
       }
+      // The conversation no longer fits the model's INPUT window. Retrying at 2x maxTokens — what
+      // the max_tokens branch below does — sends the same oversized prompt and asks for a longer
+      // reply, so it buys a second guaranteed failure at full price. Stop and let the next step
+      // start from a compacted context.
+      if (res.stopReason === 'context_window') {
+        status = 'aborted';
+        error = 'context_window: the conversation no longer fits this model';
+        transcript.push({ role: 'assistant', content: res.content });
+        break;
+      }
       if (res.stopReason === 'max_tokens') {
         const partialToolUse = res.content.some((c) => c.type === 'tool_use');
         if (partialToolUse) {

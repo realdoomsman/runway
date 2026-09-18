@@ -53,6 +53,25 @@ describe('catalog gating', () => {
     expect(parseModelSpec('openai:gpt:abc:2')).toBeNull();
     expect(parseModelSpec('claude-opus-5')).toBeNull();
   });
+
+  // An env-added model goes straight onto the wire, so a capability guess that is wrong for the
+  // family is a 400 on the first real call. Haiku rejects both adaptive thinking and effort.
+  it('never gives an env-added Haiku adaptive thinking or effort', () => {
+    for (const id of ['claude-haiku-4-5-20251001', 'claude-haiku-5', 'claude-3-5-haiku-20241022']) {
+      expect(parseModelSpec(`anthropic:${id}:1:5`)).toMatchObject({ id, thinking: 'none', supportsEffort: false });
+    }
+  });
+
+  it('gives env-added Opus, Sonnet, Fable and Mythos adaptive thinking and effort', () => {
+    for (const id of ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-fable-5', 'claude-mythos-5-1']) {
+      expect(parseModelSpec(`anthropic:${id}:5:25`)).toMatchObject({ id, thinking: 'adaptive', supportsEffort: true });
+    }
+  });
+
+  it('gives env-added OpenAI models effort but no thinking, and OpenRouter neither', () => {
+    expect(parseModelSpec('openai:gpt-5.6-nova:1.5:9')).toMatchObject({ thinking: 'none', supportsEffort: true });
+    expect(parseModelSpec('openrouter:z-ai/glm-5:0.3:1.2')).toMatchObject({ thinking: 'none', supportsEffort: false });
+  });
 });
 
 describe('cheapest (B14)', () => {
@@ -89,7 +108,7 @@ describe('openrouter pricing refresh (A5)', () => {
     expect(deepseek?.cacheReadPerM).toBeCloseTo(0.07, 6);
     expect(models.find((m) => m.id === 'moonshotai/kimi-k2')?.inputPerM).toBeCloseTo(0.6, 6);
     // Untouched: qwen is absent from the response, anthropic is not an openrouter model.
-    expect(models.find((m) => m.id === 'qwen/qwen3-235b-a22b-2507')?.inputPerM).toBe(0.1);
+    expect(models.find((m) => m.id === 'qwen/qwen3-235b-a22b-2507')?.inputPerM).toBe(0.0875);
     expect(models.find((m) => m.id === 'claude-opus-5')?.inputPerM).toBe(5);
   });
 

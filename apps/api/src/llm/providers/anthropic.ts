@@ -34,6 +34,11 @@ export function createAnthropicProvider(opts: AnthropicProviderOpts): LlmProvide
 }
 
 export function buildAnthropicRequest(req: LlmRequest, model: ModelInfo): AnthropicParams {
+  // Two reasons, both of which are 400s from the API rather than anything we could recover from:
+  // `messages` must be non-empty, and the explicit 1h breakpoint below must not be the LAST cacheable
+  // block while top-level automatic caching is asking for the 5m default — mismatched TTLs on the
+  // same block are rejected. A non-empty `messages` array guarantees the system block is never last.
+  if (req.messages.length === 0) throw new Error('anthropic request needs at least one message');
   const params: AnthropicParams = {
     model: model.id,
     max_tokens: req.maxTokens,
@@ -73,11 +78,19 @@ function toMessageParam(m: LlmMessage): Anthropic.MessageParam {
   return { role: m.role, content: m.content.map(toBlockParam) };
 }
 
+// The Messages API rejects a text block that is empty or whitespace-only ("text content blocks must
+// contain non-whitespace text") and applies the same rule to a string `tool_result.content`. No tool
+// currently returns an empty body, but one that did would 400 the whole turn — including every earlier
+// round in it — so the block carries an explicit marker instead. Never silently dropped: the model is
+// told the tool produced nothing.
+const EMPTY_BLOCK_TEXT = '(empty)';
+const nonEmpty = (s: string): string => (s.trim().length > 0 ? s : EMPTY_BLOCK_TEXT);
+
 function toBlockParam(c: LlmContent): Anthropic.ContentBlockParam {
   switch (c.type) {
-    case 'text': return { type: 'text', text: c.text };
+    case 'text': return { type: 'text', text: nonEmpty(c.text) };
     case 'tool_use': return { type: 'tool_use', id: c.id, name: c.name, input: c.input };
-    case 'tool_result': return { type: 'tool_result', tool_use_id: c.toolUseId, content: c.content, ...(c.isError ? { is_error: true } : {}) };
+    case 'tool_result': return { type: 'tool_result', tool_use_id: c.toolUseId, content: nonEmpty(c.content), ...(c.isError ? { is_error: true } : {}) };
     case 'thinking': return { type: 'thinking', thinking: c.thinking, signature: c.signature };
     case 'redacted_thinking': return { type: 'redacted_thinking', data: c.data };
   }
@@ -100,10 +113,16 @@ export function mapAnthropicResponse(message: Anthropic.Message, model: ModelInf
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
     cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
   };
+  // buildAnthropicRequest marks the system prompt with `ttl: '1h'`, and a 1-hour cache write is
+  // billed at 2× base input where a 5-minute write is 1.25×. `usage.cache_creation` carries the
+  // split; pricing the whole write at the 5m rate would silently under-charge every step that
+  // (re)writes the system prefix. When the API omits the breakdown there is nothing to attribute,
+  // so the write is priced at the 5m rate — see the golden test in test/llm/cost-audit.test.ts.
+  const cacheWrite1hTokens = message.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
   const res: LlmResponse = {
     content,
     stopReason: mapStopReason(message.stop_reason),
-    usage: { ...tokens, costMicro: priceUsage(model, tokens) },
+    usage: { ...tokens, costMicro: priceUsage(model, { ...tokens, cacheWrite1hTokens }) },
     model: message.model,
     raw: message,
   };
@@ -123,7 +142,10 @@ const STOP_REASONS: Record<Anthropic.StopReason, StopReason> = {
   refusal: 'refusal',
   pause_turn: 'pause_turn',
   stop_sequence: 'stop_sequence',
-  model_context_window_exceeded: 'max_tokens',
+  // NOT 'max_tokens'. That one means the reply hit the output cap and is cured by raising it;
+  // this one means the CONVERSATION no longer fits the model's input window, where raising the
+  // output cap only makes the next request bigger. step.ts aborts on it instead of retrying.
+  model_context_window_exceeded: 'context_window',
 };
 
 function mapStopReason(reason: Anthropic.StopReason | null): StopReason {

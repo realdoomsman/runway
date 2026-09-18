@@ -2,6 +2,7 @@
 import { describeConfig, loadConfig } from './config.js';
 import { createContainer } from './core/container.js';
 import { loadDotenv } from './lib/env.js';
+import { isConfigError } from './lib/errors.js';
 import { createLogger } from './lib/log.js';
 
 const SHUTDOWN_GRACE_MS = 9 * 60_000;   // > STEP_TIMEOUT_MS so in-flight steps can finish
@@ -40,6 +41,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((e: unknown) => {
+  // A ConfigError's message IS the report, written for whoever owns the .env. Printing a stack over
+  // it buries the one paragraph that says what to change. Everything else still gets the stack.
+  if (isConfigError(e)) {
+    console.error(`\n${e.message}\n`);
+    process.exit(1);
+  }
   console.error(e instanceof Error ? e.stack ?? e.message : e);
   process.exit(1);
 });

@@ -118,7 +118,7 @@ describe('openai usage → cost', () => {
 });
 
 describe('openrouter usage → cost', () => {
-  const deepseek = model('deepseek/deepseek-chat-v3.1');   // in 0.2, out 0.8
+  const deepseek = model('deepseek/deepseek-chat-v3.1');   // live OpenRouter catalogue: in 0.25, out 0.95
 
   it('treats usage.cost (USD) as authoritative', () => {
     const usage = { prompt_tokens: 5000, completion_tokens: 800, total_tokens: 5800, cost: 0.0042 };
@@ -128,7 +128,7 @@ describe('openrouter usage → cost', () => {
   it('falls back to catalog pricing when no cost is reported', () => {
     const usage = { prompt_tokens: 5000, completion_tokens: 800, total_tokens: 5800 };
     const res = mapChatResponse(chatCompletion({ usage, model: deepseek.id }), deepseek, { costFromUsage: true });
-    expect(res.usage).toEqual({ inputTokens: 5000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 800, costMicro: 1640 });
+    expect(res.usage).toEqual({ inputTokens: 5000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 800, costMicro: 2010 });
   });
 
   it('rounds a sub-micro cost up rather than to zero', () => {

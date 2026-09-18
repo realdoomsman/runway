@@ -32,7 +32,10 @@ export {
   type TreasuryInflowKind, type TreasuryService,
 } from './pool.js';
 export { TREASURY_ROW_ID, createTreasuryStore, type TreasuryStore, type TreasuryTxInsert } from './poolStore.js';
-export { deriveAta, extractTokenTransfers, largestUsdcTransfer, usdcInflowsTo, type TokenTransfer } from './parse.js';
+export {
+  deriveAta, extractTokenTransfers, largestUsdcTransfer, resolveInflow, usdcInflowsTo,
+  type ResolvedInflow, type TokenTransfer,
+} from './parse.js';
 export { createSolPriceSource, lamportsToMicro, type SolPriceSource } from './price.js';
 export { createSolanaChain } from './solana.js';
 export { invalidTx, shortAddr, verifyUsdcTransfer, type VerifyUsdcOpts } from './verify.js';

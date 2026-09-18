@@ -98,4 +98,40 @@ describe('chat providers', () => {
     const error = await provider.complete(makeRequest({ model: nano.id }), nano).catch((e: unknown) => e);
     expect(error).toMatchObject({ provider: 'openai', retryable: true, status: 500 });
   });
+
+  // OpenRouter reports upstream failures as HTTP 200 with a top-level `error` and no `choices`.
+  // The SDK does not raise on those. Left unhandled the step records a bare "provider error" with
+  // the real reason discarded, and a 429 that should have been retried is not.
+  it('raises the OpenRouter 200-with-error body instead of swallowing it', async () => {
+    const provider = createOpenRouterProvider({
+      apiKey: 'or-test',
+      client: openaiClient(async () => ({ id: 'c1', object: 'chat.completion', created: 0, model: kimi.id, choices: [], error: { code: 429, message: 'upstream rate-limited' } })),
+    });
+    const error = await provider.complete(makeRequest({ model: kimi.id }), kimi).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(LlmCallError);
+    expect(error).toMatchObject({ provider: 'openrouter', status: 429, retryable: true });
+    expect((error as LlmCallError).message).toContain('upstream rate-limited');
+  });
+
+  it('raises a choice-less 200 rather than billing an empty turn at zero', async () => {
+    const provider = createOpenRouterProvider({
+      apiKey: 'or-test',
+      client: openaiClient(async () => ({ id: 'c1', object: 'chat.completion', created: 0, model: kimi.id, choices: [] })),
+    });
+    const error = await provider.complete(makeRequest({ model: kimi.id }), kimi).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(LlmCallError);
+    expect(error).toMatchObject({ provider: 'openrouter', retryable: false });
+    expect((error as LlmCallError).message).toContain('no choices');
+  });
+
+  // The dialect is chosen from `model.provider`; a model sent to the wrong provider would be built
+  // in the wrong shape (wrong output-cap spelling above all). Loud, not silent.
+  it('refuses to send a model to the provider it does not belong to', async () => {
+    const create = vi.fn();
+    const provider = createOpenAiProvider({ apiKey: 'sk-test', client: openaiClient(create) });
+    const error = await provider.complete(makeRequest({ model: kimi.id }), kimi).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(LlmCallError);
+    expect((error as LlmCallError).message).toMatch(/openrouter model and cannot be sent to openai/);
+    expect(create).not.toHaveBeenCalled();
+  });
 });

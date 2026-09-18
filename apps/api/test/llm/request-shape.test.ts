@@ -49,19 +49,22 @@ describe.each(byProvider('anthropic'))('anthropic request shape: $id', (model) =
 });
 
 describe.each([...byProvider('openai'), ...byProvider('openrouter')])('chat request shape: $id', (model) => {
-  const includeUsage = model.provider === 'openrouter';
-  const params = buildChatRequest(makeRequest({ model: model.id, effort: 'xhigh' }), model, { includeUsage });
+  const openrouter = model.provider === 'openrouter';
+  const params = buildChatRequest(makeRequest({ model: model.id, effort: 'xhigh' }), model);
 
-  it('puts the system prompt first and sends max_completion_tokens', () => {
+  // The output cap MUST bind on both dialects: OpenAI reasoning models reject `max_tokens`, and
+  // OpenRouter advertises `max_tokens` (never `max_completion_tokens`) in supported_parameters and
+  // silently drops what it does not support — an unbound generation there is an agent's treasury.
+  it('puts the system prompt first and caps output with the spelling this provider honours', () => {
     expect(params.messages[0]).toEqual({ role: 'system', content: expect.any(String) });
-    expect(params.max_completion_tokens).toBe(16_000);
     expect(params.model).toBe(model.id);
-    expect('max_tokens' in params).toBe(false);
+    expect(openrouter ? params.max_tokens : params.max_completion_tokens).toBe(16_000);
+    expect(openrouter ? 'max_completion_tokens' in params : 'max_tokens' in params).toBe(false);
   });
 
-  it('sends sorted strict function tools with parallel calls on', () => {
+  it('sends sorted strict function tools, with parallel calls declared on openai only', () => {
     expect(params.tools?.map((t) => t.type === 'function' && t.function.name)).toEqual(sortedToolNames);
-    expect(params.parallel_tool_calls).toBe(true);
+    expect(params.parallel_tool_calls).toBe(openrouter ? undefined : true);
     for (const tool of params.tools ?? []) {
       if (tool.type !== 'function') throw new Error('expected function tool');
       expect(tool.function.strict).toBe(true);
@@ -73,11 +76,11 @@ describe.each([...byProvider('openai'), ...byProvider('openrouter')])('chat requ
   });
 
   it('asks for usage accounting on openrouter only (A5)', () => {
-    expect(params.usage).toEqual(includeUsage ? { include: true } : undefined);
+    expect(params.usage).toEqual(openrouter ? { include: true } : undefined);
   });
 
   it('sends tool_choice none for closing completions', () => {
-    const closing = buildChatRequest(makeRequest({ model: model.id, toolChoice: 'none' }), model, { includeUsage });
+    const closing = buildChatRequest(makeRequest({ model: model.id, toolChoice: 'none' }), model);
     expect(closing.tool_choice).toBe('none');
     expect(closing.tools).toHaveLength(TOOL_DEFS.length);
   });
@@ -103,7 +106,7 @@ describe('chat message mapping (A7)', () => {
           { type: 'text', text: 'Round cap reached; finish with a summary' },
         ] },
       ],
-    }), model, { includeUsage: false });
+    }), model);
 
     expect(params.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool', 'tool', 'user']);
     const assistant = params.messages[2] as { content: string | null; tool_calls: { id: string; function: { name: string; arguments: string } }[] };
@@ -122,7 +125,7 @@ describe('chat message mapping (A7)', () => {
         { role: 'user', content: [{ type: 'text', text: 'go' }] },
         { role: 'assistant', content: [{ type: 'tool_use', id: 'c1', name: 'bash', input: {} }] },
       ],
-    }), model, { includeUsage: false });
+    }), model);
     expect((params.messages[2] as { content: string | null }).content).toBeNull();
   });
 });

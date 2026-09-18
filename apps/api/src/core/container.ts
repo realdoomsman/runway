@@ -17,6 +17,8 @@ import { createToolRegistry } from '../tools/index.js';
 import { createBus } from './bus.js';
 import type { Clock, CoreDeps, Deps, HttpServer } from './interfaces.js';
 import { toolPorts } from './ports.js';
+import { assertReady, type PreflightProbes } from './preflight.js';
+import { realProbes } from './probes.js';
 
 export interface Container {
   deps: Deps;
@@ -24,7 +26,12 @@ export interface Container {
   stop(): Promise<void>;
 }
 
-export async function createContainer(config: Config, log: Logger): Promise<Container> {
+export interface ContainerOpts {
+  /** Test seam for the boot preflight; production passes the real daemon and RPC probes. */
+  probes?: PreflightProbes;
+}
+
+export async function createContainer(config: Config, log: Logger, opts: ContainerOpts = {}): Promise<Container> {
   const dbHandle = createDb(config.databaseUrl);
   const clock: Clock = config.demo.enabled ? new FastClock() : systemClock;
   const core: CoreDeps = {
@@ -56,6 +63,14 @@ export async function createContainer(config: Config, log: Logger): Promise<Cont
     deps,
     async start() {
       await assertSchema(deps.db);
+      // Before anything listens or spends: refuse every configuration that would look real and not be.
+      // The docker and chain probes actually call out; nothing here trusts a flag.
+      await assertReady({
+        config,
+        log: log.child({ mod: 'preflight' }),
+        probes: opts.probes ?? realProbes(config, deps.chain),
+        models: deps.llm.models(),
+      });
       await deps.llm.refreshPricing();
       http = await createServer(deps);
       await http.listen();

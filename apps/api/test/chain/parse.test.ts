@@ -1,7 +1,8 @@
 import { Keypair, PublicKey, type ParsedTransactionWithMeta } from '@solana/web3.js';
 import { describe, expect, it } from 'vitest';
 import {
-  blockTimeToDate, deriveAta, extractTokenTransfers, largestUsdcTransfer, usdcInflowsTo,
+  blockTimeToDate, deriveAta, extractTokenTransfers, largestUsdcTransfer, resolveInflow, usdcInflowsTo,
+  type TokenTransfer,
 } from '../../src/chain/parse.js';
 
 const USDC_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -146,5 +147,50 @@ describe('chain/parse', () => {
   it('converts block times, treating a missing one as the epoch', () => {
     expect(blockTimeToDate(1_760_000_000).toISOString()).toBe('2025-10-09T08:53:20.000Z');
     expect(blockTimeToDate(null).getTime()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveInflow: one transaction → the single row the deposit tables can hold.
+//
+// deposits_seen is keyed by signature, so a transaction carrying USDC legs from two different senders
+// cannot become two rows: the second would hit the conflict clause and its money would never be
+// credited. It collapses to one row, and the only real question is WHICH sender the row names —
+// because payments/poller.ts turns that name into `refundTo` on an underpaid purchase.
+// ---------------------------------------------------------------------------
+describe('chain/parse resolveInflow', () => {
+  const leg = (from: string, amount: number): TokenTransfer => ({ destination: agentAta, from, to: agent, mint: USDC_MAINNET, amount });
+
+  it('is null when nothing credited the address', () => {
+    expect(resolveInflow([])).toBeNull();
+  });
+
+  it('passes a single leg straight through', () => {
+    expect(resolveInflow([leg(buyer, 25_000_000)])).toEqual({ from: buyer, amount: 25_000_000, senders: [buyer] });
+  });
+
+  it('sums every leg from one sender and still reports one sender', () => {
+    const r = resolveInflow([leg(buyer, 10_000_000), leg(buyer, 15_000_000)])!;
+    expect(r.amount).toBe(25_000_000);
+    expect(r.senders).toEqual([buyer]);
+  });
+
+  // The attack this closes: attach a 1-micro leg to someone else's deposit transaction and, under the
+  // old first-leg-wins rule, the entire refund of their $100 is redirected to you.
+  it('names the LARGEST leg, so a dust leg cannot capture the refund of a big one', () => {
+    const attacker = addr();
+    const first = resolveInflow([leg(attacker, 1), leg(buyer, 100_000_000)])!;
+    expect(first.from).toBe(buyer);
+    expect(first.amount).toBe(100_000_001);
+    // …and the same however the RPC happened to order them.
+    expect(resolveInflow([leg(buyer, 100_000_000), leg(attacker, 1)])!.from).toBe(buyer);
+  });
+
+  it('reports every distinct sender so the caller can say the choice was ambiguous', () => {
+    const other = addr();
+    const r = resolveInflow([leg(buyer, 5), leg(other, 7), leg(buyer, 3)])!;
+    expect(r.senders).toHaveLength(2);
+    expect(new Set(r.senders)).toEqual(new Set([buyer, other]));
+    expect(r.amount).toBe(15);
   });
 });

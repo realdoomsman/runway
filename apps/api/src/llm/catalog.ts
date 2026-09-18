@@ -18,7 +18,10 @@ const KEY_ENV: Record<KeyedProvider, string> = {
 // Well-known models kept out of the default catalog for cost (SPEC §6). Listing the id in
 // LLM_ALLOWED_MODELS adds one.
 export const ENV_ADDABLE_MODELS: readonly ModelInfo[] = [
-  { id: 'claude-fable-5-1', provider: 'anthropic', label: 'Claude Fable 5.1', tier: 'frontier', inputPerM: 10, outputPerM: 50, contextK: 1000, supportsEffort: true, thinking: 'adaptive', enabled: true },
+  // Fable 5.1 does NOT price cache reads at the usual 0.1x base input: they are $0.25/MTok flat,
+  // where the default would charge $1.00/MTok. Left to the default every cached round on this model
+  // would be billed to the agent at 4x what Anthropic actually charges.
+  { id: 'claude-fable-5-1', provider: 'anthropic', label: 'Claude Fable 5.1', tier: 'frontier', inputPerM: 10, outputPerM: 50, cacheReadPerM: 0.25, contextK: 1000, supportsEffort: true, thinking: 'adaptive', enabled: true },
 ];
 
 export interface CatalogEnv {
@@ -44,13 +47,28 @@ export const catalogEnv = (config: Config): CatalogEnv => ({
 
 const SPEC_RE = /^(anthropic|openai|openrouter):([^:\s]+):(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)(?::(\d+))?$/;
 
+// Anthropic model families that reject `thinking: {type:'adaptive'}` and `output_config.effort`.
+// Sending either to one of these is a 400 on the very first real call, so an env-added model whose
+// id starts with one of these prefixes gets neither. Everything else on the Anthropic side (Opus 4.6+,
+// Sonnet 4.6+, Fable, Mythos) takes both.
+const ANTHROPIC_NO_ADAPTIVE_PREFIXES = ['claude-haiku', 'claude-3'] as const;
+
+const anthropicCaps = (id: string): Pick<ModelInfo, 'supportsEffort' | 'thinking'> =>
+  ANTHROPIC_NO_ADAPTIVE_PREFIXES.some((p) => id.startsWith(p))
+    ? { supportsEffort: false, thinking: 'none' }
+    : { supportsEffort: true, thinking: 'adaptive' };
+
 // `provider:id:inputPerM:outputPerM[:contextK]` adds an arbitrary model with sensible defaults
-// for the provider (Anthropic models get adaptive thinking + effort, OpenAI effort only).
+// for the provider (Anthropic models get adaptive thinking + effort unless the family rejects them,
+// OpenAI effort only, OpenRouter neither).
 export function parseModelSpec(entry: string): ModelInfo | null {
   const m = SPEC_RE.exec(entry.trim());
   if (!m) return null;
   const provider = m[1] as KeyedProvider;
   const id = m[2]!;
+  const caps = provider === 'anthropic'
+    ? anthropicCaps(id)
+    : { supportsEffort: provider === 'openai', thinking: 'none' as const };
   return {
     id,
     provider,
@@ -59,8 +77,7 @@ export function parseModelSpec(entry: string): ModelInfo | null {
     inputPerM: Number(m[3]),
     outputPerM: Number(m[4]),
     contextK: m[5] === undefined ? 200 : Number(m[5]),
-    supportsEffort: provider !== 'openrouter',
-    thinking: provider === 'anthropic' ? 'adaptive' : 'none',
+    ...caps,
     enabled: true,
   };
 }

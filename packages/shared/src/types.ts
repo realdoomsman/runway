@@ -32,7 +32,12 @@ export type ToolName =
   | 'wallet' | 'set_model' | 'set_effort' | 'sleep' | 'remember' | 'forget'
   | 'update_project' | 'publish_strategy' | 'post_update' | 'message_owner';
 export type DecisionKind = 'plan' | 'action' | 'pivot' | 'sleep' | 'hire' | 'sell' | 'note' | 'death' | 'birth';
-export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'pause_turn' | 'stop_sequence' | 'error';
+// `context_window` is deliberately NOT folded into `max_tokens`. They look alike and mean opposite
+// things: max_tokens is the OUTPUT cap, and the cure is more room; context_window is the INPUT
+// ceiling, where asking for more output makes it worse. runtime/step.ts retries the first and aborts
+// the second, so the two must stay distinguishable all the way from the provider.
+export type StopReason =
+  | 'end_turn' | 'tool_use' | 'max_tokens' | 'context_window' | 'refusal' | 'pause_turn' | 'stop_sequence' | 'error';
 export type StepStatus = 'running' | 'ok' | 'error' | 'refused' | 'skipped' | 'aborted';
 export type BurnBasis = 'projected' | 'trailing';
 export type ChainMode = 'memory' | 'solana';
@@ -70,7 +75,8 @@ export interface ModelInfo {
   inputPerM: number;          // USD per 1M input tokens
   outputPerM: number;
   cacheReadPerM?: number;     // USD per 1M cached input tokens — defaults to inputPerM × 0.1
-  cacheWritePerM?: number;    // USD per 1M cache-write tokens — defaults to inputPerM × 1.25
+  cacheWritePerM?: number;    // USD per 1M 5-minute cache-write tokens — defaults to inputPerM × 1.25
+  cacheWrite1hPerM?: number;  // USD per 1M 1-hour cache-write tokens — defaults to inputPerM × 2
   contextK: number;           // context window in K tokens
   supportsEffort: boolean;
   thinking: ThinkingMode;

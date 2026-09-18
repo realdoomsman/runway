@@ -30,9 +30,25 @@ baked in — agent wallet keys never leave the API process.
 | pids-limit | 256 |
 | capabilities | `--cap-drop ALL`, `--security-opt no-new-privileges` |
 | filesystem | read-only root, `tmpfs /tmp` (rw,nosuid,256m), volume `rw-vol-<agentId>` at `/work` |
-| network | default bridge — agents need egress |
+| network | `runway-agents` bridge (host interface `br-runway-agent`) — agents need egress |
 | user | 1000:1000 |
+| init | `Init: true` — docker-init (tini) as pid 1, not `sleep infinity` |
 | logs | disabled (`LogConfig: none`); stdout/stderr are captured per exec |
+
+### Why `Init: true`
+
+Measured against a real daemon, not assumed. `sleep infinity` as pid 1 never calls `wait()`, so any command
+that leaves a child behind (`npm run dev &`, or just `(sleep 1 &)`) reparents it to pid 1 and leaks a
+permanent zombie: 40 such commands produced 40 zombies that never cleared. With `--pids-limit 256` a
+long-lived agent therefore wedges its own container for good — every later exec fails with a runc
+`Cannot fork` error and only `destroy` recovers it. The kernel also applies no default signal action to
+pid 1, so `sleep infinity` ignored SIGTERM and every `docker stop` burned the full grace period (5117 ms
+measured, versus 112 ms with tini) — which matters because sleeping and paused agents are stopped and
+started constantly. `apps/api/test/sandbox/docker.integration.test.ts` asserts both properties.
+
+### What the image does not contain
+
+No `ps` — `node:22-bookworm-slim` omits `procps`. Agents inspecting their own processes must read `/proc`.
 
 Commands run as `timeout -s KILL <n> sh -lc '<command>'`; if the exec outlives that by 3s the host kills the
 container. CPU time comes from the `cpu_stats.cpu_usage.total_usage` delta around the exec, falling back to

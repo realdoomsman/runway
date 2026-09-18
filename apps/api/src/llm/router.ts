@@ -64,6 +64,7 @@ export function createRouter(opts: RouterOpts): LlmRouter {
       try {
         const res = await provider.complete(remainingMs === undefined ? req : { ...req, remainingMs }, model);
         warnOnCacheMiss(log, req, res, model);
+        warnOnUnmeteredUsage(log, req, res, model);
         return res;
       } catch (e) {
         lastError = e;
@@ -128,6 +129,19 @@ function warnOnCacheMiss(log: Logger, req: LlmRequest, res: LlmResponse, model: 
   log.warn(
     { agentId: req.agentId, model: model.id, inputTokens: res.usage.inputTokens },
     'anthropic prompt cache miss: the whole conversation was re-read at full price',
+  );
+}
+
+// A completion the provider could not meter is billed to the agent at zero, so the platform pays for
+// it out of its own pocket and no one finds out. Every real provider returns a usage block on a
+// non-streaming call; if one does not, that is an anomaly worth a line in the log rather than silence.
+function warnOnUnmeteredUsage(log: Logger, req: LlmRequest, res: LlmResponse, model: ModelInfo): void {
+  if (model.provider === 'mock') return;
+  const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costMicro } = res.usage;
+  if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens > 0 && costMicro > 0) return;
+  log.warn(
+    { agentId: req.agentId, model: model.id, usage: res.usage },
+    'llm response carried no usable usage accounting: this completion was billed to the agent at zero',
   );
 }
 

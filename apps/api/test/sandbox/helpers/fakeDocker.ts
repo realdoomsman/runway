@@ -5,7 +5,16 @@ import Docker from 'dockerode';
 import { packTar, type TarInput } from '../../../src/sandbox/tar.js';
 
 export interface FakeExecRecord { cmd: string[]; user?: string; stdin: string }
-export interface FakeExecAnswer { stdout?: string; stderr?: string; exitCode?: number; cpuNs?: number; hang?: boolean }
+export interface FakeExecAnswer {
+  stdout?: string; stderr?: string; exitCode?: number; cpuNs?: number; hang?: boolean;
+  /**
+   * `exec.inspect().Pid`. The real daemon reports 0 when the process NEVER STARTED and writes runc's
+   * own error to the output stream (verified against Docker 29.4.0: a missing binary gives
+   * `{exitCode:127, pid:0, out:'OCI runtime exec failed: …'}` while a shell that runs and cannot find
+   * the command gives `{exitCode:127, pid:86824}`). Defaults to a plausible live pid.
+   */
+  pid?: number;
+}
 
 export interface FakeContainerState {
   name: string;
@@ -76,16 +85,18 @@ export function createFakeDocker(): FakeDocker {
         const record: FakeExecRecord = { cmd: opts.Cmd, user: opts.User, stdin: '' };
         s.execs.push(record);
         let exitCode = 0;
+        let pid = 4242;
         // Resolved on first read, by which time the driver has written stdin.
         const produce = (): Buffer | null => {
           const answer = s.respond(opts.Cmd, record.stdin);
           if (answer.cpuNs !== undefined) s.cpuNs = answer.cpuNs;
           exitCode = answer.exitCode ?? 0;
+          pid = answer.pid ?? 4242;
           return answer.hang ? null : frames(answer.stdout ?? '', answer.stderr ?? '');
         };
         return {
           async start() { return new FakeExecStream(produce, record); },
-          async inspect() { return { Running: false, ExitCode: exitCode } as Docker.ExecInspectInfo; },
+          async inspect() { return { Running: false, ExitCode: exitCode, Pid: pid } as Docker.ExecInspectInfo; },
         };
       },
     };

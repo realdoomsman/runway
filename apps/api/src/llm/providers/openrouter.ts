@@ -15,5 +15,5 @@ export function createOpenRouterProvider(opts: OpenRouterProviderOpts): LlmProvi
     maxRetries: 0,
     defaultHeaders: { 'X-Title': 'RUNWAY' },
   });
-  return createChatProvider({ name: 'openrouter', client, includeUsage: true, costFromUsage: true });
+  return createChatProvider({ name: 'openrouter', client, costFromUsage: true });
 }

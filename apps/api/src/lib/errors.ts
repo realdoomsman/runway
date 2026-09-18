@@ -19,6 +19,22 @@ export class ApiError extends Error {
 
 export const isApiError = (e: unknown): e is ApiError => e instanceof ApiError;
 
+/**
+ * A configuration problem the operator has to fix, thrown by config.ts and core/preflight.ts. The
+ * message is the whole report and is written to be read by the person who owns the .env — so the
+ * boot handler prints it alone. A JavaScript stack trace pointing into dist/ tells that reader
+ * nothing and buries the one paragraph that matters.
+ */
+export class ConfigError extends Error {
+  readonly operatorFacing = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+export const isConfigError = (e: unknown): e is ConfigError => e instanceof ConfigError;
+
 export const badRequest = (message: string, code: ApiErrorCode | string = 'BAD_REQUEST', details?: unknown) => new ApiError(400, code, message, details);
 export const unauthorized = (message = 'Sign in required') => new ApiError(401, 'UNAUTHORIZED', message);
 export const forbidden = (message = 'Not allowed') => new ApiError(403, 'FORBIDDEN', message);

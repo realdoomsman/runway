@@ -96,6 +96,31 @@ export function usdcInflowsTo(tx: ParsedTransactionWithMeta, ata: string, usdcMi
   return extractTokenTransfers(tx).filter((t) => t.destination === ata && (t.mint === null || t.mint === usdcMint));
 }
 
+export interface ResolvedInflow { from: string; amount: Micro; senders: string[] }
+
+/**
+ * Collapses every USDC leg of ONE transaction into the single inflow the rest of the system sees.
+ *
+ * It has to be one row per signature: runtime/deposits.ts dedupes on `deposits_seen.sig`, so a second
+ * row carrying the same signature would be dropped by the conflict clause with its money uncredited.
+ * The amount is therefore the sum of all legs — which is what actually arrived — and `from` names one
+ * of possibly several senders.
+ *
+ * It names the sender of the LARGEST leg, not the first the RPC happened to return. `from` becomes
+ * `refundTo` on an underpaid purchase (payments/poller.ts), so with first-wins anyone could attach a
+ * 1-micro leg to someone else's $100 deposit and have the entire refund redirected to themselves.
+ * `senders` is returned so the caller can say out loud that the choice was ambiguous.
+ */
+export function resolveInflow(parts: readonly TokenTransfer[]): ResolvedInflow | null {
+  if (parts.length === 0) return null;
+  const largest = parts.reduce((a, b) => (b.amount > a.amount ? b : a));
+  return {
+    from: largest.from,
+    amount: parts.reduce((sum, p) => sum + p.amount, 0),
+    senders: [...new Set(parts.map((p) => p.from))],
+  };
+}
+
 export interface UsdcTransferSummary { from: string; to: string; amount: Micro }
 
 // The largest USDC transfer in the transaction — the one a user-submitted payment/escrow sig is about.

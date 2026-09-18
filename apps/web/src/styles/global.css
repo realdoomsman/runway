@@ -280,6 +280,9 @@ button { font-family: var(--mono); }
   padding: 2px 7px; text-transform: uppercase;
 }
 
+/* Mode chip: amber for anything that is not real mainnet money (SIM / DEMO / DEVNET). */
+.chip-warn { border-color: rgba(240, 178, 62, 0.45); color: var(--amber); }
+
 .mono-num { font-variant-numeric: tabular-nums; }
 .pos { color: var(--green); }
 .neg { color: var(--red); }

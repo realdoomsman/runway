@@ -8,8 +8,8 @@ import type { SandboxDriver } from '../../src/core/interfaces.js';
 import { silentLogger } from '../../src/lib/log.js';
 import { SandboxLimitError, SandboxPathError } from '../../src/sandbox/common.js';
 import {
-  MEMORY_BYTES, NANO_CPUS, PIDS_LIMIT, SANDBOX_USER, containerCreateOptions, containerName, cpuMsFromStats,
-  createDockerSandbox, fileArchiveEntries, parseFindOutput, volumeName,
+  EXEC_START_FAILED_EXIT, MEMORY_BYTES, NANO_CPUS, PIDS_LIMIT, SANDBOX_USER, containerCreateOptions,
+  containerName, cpuMsFromStats, createDockerSandbox, fileArchiveEntries, parseFindOutput, volumeName,
 } from '../../src/sandbox/docker.js';
 import { AGENT_NETWORK_DEFAULT, egressFirewallRules, networkCreateOptions } from '../../src/sandbox/egress.js';
 import { readTar } from '../../src/sandbox/tar.js';
@@ -40,6 +40,9 @@ describe('containerCreateOptions', () => {
     expect(host.CapDrop).toEqual(['ALL']);
     expect(host.SecurityOpt).toEqual(['no-new-privileges']);
     expect(host.ReadonlyRootfs).toBe(true);
+    // docker-init as pid 1: `sleep infinity` reaps nothing (40 backgrounding commands left 40 permanent
+    // zombies against a 256 pid limit) and ignores SIGTERM (every stop burned the full 5s grace).
+    expect(host.Init).toBe(true);
     expect(host.Tmpfs).toEqual({ '/tmp': expect.stringContaining('nosuid') as unknown as string });
     expect(host.Mounts).toEqual([{ Type: 'volume', Source: `rw-vol-${AGENT}`, Target: '/work' }]);
   });
@@ -132,6 +135,47 @@ describe('ensure', () => {
   it('rejects unsafe agent ids before touching the daemon', async () => {
     await expect(sandbox.ensure('../evil')).rejects.toBeInstanceOf(SandboxPathError);
     expect(fake.created).toHaveLength(0);
+  });
+});
+
+// The daemon reports a failure to START the process by writing runc's own error to the OUTPUT stream
+// and setting Pid 0. Measured against Docker 29.4.0 / OrbStack with a missing binary:
+//   {"exitCode":127,"pid":0,"out":"OCI runtime exec failed: exec failed: unable to start container
+//    process: exec: \"/no/such/binary\": stat /no/such/binary: no such file or directory"}
+// while a shell that runs and cannot find the command reports {"exitCode":127,"pid":86824}. Pid is
+// therefore the structural discriminator; nothing here matches on the daemon's wording.
+describe('exec when the container never started the process', () => {
+  it('does not hand the daemon\'s own error back to the agent as stdout', async () => {
+    await sandbox.ensure(AGENT);
+    const ociError = 'OCI runtime exec failed: unable to start container process: fork/exec: Cannot fork';
+    fake.container(AGENT).respond = () => ({ stdout: ociError, exitCode: 128, pid: 0 });
+
+    const res = await sandbox.exec(AGENT, 'echo alive', { timeoutMs: 5_000 });
+
+    expect(res.stdout).toBe('');                          // never presented as the command's output
+    expect(res.stderr).toContain('the container is wedged and needs recreating');
+    expect(res.stderr).toContain('Cannot fork');          // the cause is kept, just not as stdout
+    expect(res.exitCode).toBe(EXEC_START_FAILED_EXIT);    // distinct from the daemon's 128
+    expect(res.timedOut).toBe(false);
+  });
+
+  it('leaves a real command that exits 127 completely alone', async () => {
+    await sandbox.ensure(AGENT);
+    // The shell ran (a live pid) and reported for itself. This is NOT infrastructure failure.
+    fake.container(AGENT).respond = () => ({ stderr: 'sh: 1: nope: not found\n', exitCode: 127, pid: 86_824 });
+
+    const res = await sandbox.exec(AGENT, 'nope', { timeoutMs: 5_000 });
+
+    expect(res.exitCode).toBe(127);
+    expect(res.stderr).toBe('sh: 1: nope: not found\n');
+    expect(res.stderr).not.toContain('wedged');
+  });
+
+  it('leaves a real command that exits 128 alone too, when a process really ran', async () => {
+    await sandbox.ensure(AGENT);
+    fake.container(AGENT).respond = () => ({ stdout: 'mine\n', exitCode: 128, pid: 1_234 });
+    const res = await sandbox.exec(AGENT, 'exit 128', { timeoutMs: 5_000 });
+    expect(res).toMatchObject({ exitCode: 128, stdout: 'mine\n', stderr: '' });
   });
 });
 

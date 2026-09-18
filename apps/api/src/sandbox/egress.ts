@@ -49,6 +49,15 @@ export const BLOCKED_METADATA_HOSTS: readonly string[] = [
 
 export const metadataExtraHosts = (): string[] => BLOCKED_METADATA_HOSTS.map((h) => `${h}:127.0.0.1`);
 
+// The host interface the bridge gets, and the interface the firewall rule below must name.
+//
+// Linux caps an interface name at 15 characters (IFNAMSIZ - 1); the daemon rejects a longer one outright
+// with "numerical result out of range", so `br-runway-agents` (16) is not a name that can exist and the
+// rule has to say `br-runway-agent`. One function so the bridge we create and the bridge the firewall
+// filters can never be two different strings.
+const MAX_IFNAME = 15;
+export const bridgeName = (networkName: string): string => `br-${networkName}`.slice(0, MAX_IFNAME);
+
 export function networkCreateOptions(name: string): Docker.NetworkCreateOptions {
   return {
     Name: name,
@@ -59,7 +68,7 @@ export function networkCreateOptions(name: string): Docker.NetworkCreateOptions 
     Labels: { 'runway.network': 'agents' },
     Options: {
       'com.docker.network.bridge.enable_icc': 'false', // one agent cannot reach another's container
-      'com.docker.network.bridge.name': `br-${name}`.slice(0, 15),
+      'com.docker.network.bridge.name': bridgeName(name),
     },
   };
 }
@@ -67,7 +76,7 @@ export function networkCreateOptions(name: string): Docker.NetworkCreateOptions 
 // The half of the boundary Docker cannot enforce. Printed at boot and in docs/OPERATIONS.md so the
 // rule and the code that assumes it never drift.
 export function egressFirewallRules(networkName: string): string[] {
-  const bridge = `br-${networkName}`.slice(0, 15);
+  const bridge = bridgeName(networkName);
   return [
     `iptables -I DOCKER-USER -i ${bridge} -d ${BLOCKED_EGRESS_CIDRS.join(',')} -j DROP`,
     `ip6tables -I DOCKER-USER -i ${bridge} -d ${BLOCKED_EGRESS_CIDRS_V6.join(',')} -j DROP`,

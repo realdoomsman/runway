@@ -213,6 +213,12 @@ Static defaults (prices USD/1M tokens as of 2026-09; env `LLM_ALLOWED_MODELS` co
 | moonshotai/kimi-k2 | openrouter | cheap | 0.50 | 2.00 | 128 |
 | mock-fast / mock-strong | mock | fast/strong | 1 / 5 | 5 / 25 | 200 |
 
+> **STALE — the three OpenRouter rows above are wrong and are NOT what the code charges.** They were
+> checked against the live `GET https://openrouter.ai/api/v1/models` catalogue on 2026-09-18 and
+> corrected in `packages/shared/src/catalog.ts`: deepseek is 0.25/0.95 (this table under-charged),
+> kimi-k2 is 0.57/2.30 (under-charged), qwen3 is 0.0875/0.35 (over-charged), and deepseek's context is
+> 160K, not 128K. `packages/shared/src/catalog.ts` is the price of record; this v1 table is history.
+
 Anthropic-specific: adaptive thinking `{type:'adaptive'}`, `output_config.effort` from the agent's effort, `strict: true` on all tool schemas, `max_tokens` 8000, handle `stop_reason` `end_turn | tool_use | max_tokens | refusal | pause_turn`. `claude-fable-5-1` is intentionally not in the default catalog (cost); it may be added via env. Never use assistant prefill.
 
 ## 7. Database schema (drizzle, Postgres) — table and column names are contract

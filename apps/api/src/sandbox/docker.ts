@@ -12,7 +12,7 @@ import {
   MAX_EXPORT_FILES, OUTPUT_CAP_BYTES, OutputCollector, SandboxLimitError, SandboxPathError, WORK_DIR, assertAgentId,
   normalizeRelPath, shellQuote, truncationNote,
 } from './common.js';
-import { AGENT_NETWORK_DEFAULT, metadataExtraHosts, networkCreateOptions } from './egress.js';
+import { AGENT_NETWORK_DEFAULT, bridgeName, metadataExtraHosts, networkCreateOptions } from './egress.js';
 import { packTar, readTar, type TarInput } from './tar.js';
 
 export interface DockerSandboxOptions { image: string; log: Logger; network?: string; docker?: Docker }
@@ -24,6 +24,9 @@ export const SANDBOX_UID = 1000;
 export const SANDBOX_USER = `${SANDBOX_UID}:${SANDBOX_UID}`;
 const TMPFS_OPTS = 'rw,nosuid,size=256m';
 const HOST_KILL_GRACE_MS = 3_000;               // in-container `timeout` fires first; `docker kill` is the fallback
+// Shell convention: "found but could not be invoked". Distinct from 128 (what the daemon reports) so
+// the caller can tell a wedged container from a command that ran and returned 128 itself.
+export const EXEC_START_FAILED_EXIT = 126;
 const TIMEOUT_SLACK_MS = 50;                    // scheduling jitter around the in-container deadline
 const EXEC_EXIT_POLLS = 40;
 const EXEC_EXIT_POLL_MS = 50;
@@ -50,6 +53,15 @@ export function containerCreateOptions(agentId: string, image: string, network: 
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges'],
       ReadonlyRootfs: true,
+      // docker-init (tini) as pid 1 instead of `sleep infinity`, for two measured reasons:
+      //   1. Reaping. An exec whose child outlives it — `npm run dev &`, or just `(sleep 1 &)` — reparents
+      //      that child to pid 1. `sleep` never calls wait(), so every one becomes a permanent zombie:
+      //      measured 40 commands => 40 zombies that never clear. PidsLimit is 256, so a long-lived agent
+      //      wedges its own container for good, and every later exec fails with a runc "Cannot fork" error.
+      //   2. Signals. The kernel applies no default action to pid 1, so `sleep infinity` ignores SIGTERM and
+      //      every `docker stop` burned the full grace period: measured 5117ms, versus 112ms with tini.
+      //      Agents are stopped and started constantly for the sleep/pause rent discount.
+      Init: true,
       Tmpfs: { '/tmp': TMPFS_OPTS },
       Mounts: [{ Type: 'volume', Source: volumeName(agentId), Target: WORK_DIR }],
       // Agents need egress, but NOT the default bridge: that is shared with whatever else the host
@@ -125,10 +137,21 @@ class DockerSandbox implements SandboxDriver {
         await this.docker.createNetwork(networkCreateOptions(this.networkName));
         this.log.info({ network: this.networkName }, 'agent network created');
       } catch (e) {
-        if (statusOf(e) !== 409) {
-          this.network = null;                  // let the next container creation try again
-          throw e;
+        const status = statusOf(e);
+        if (status === 409) return;             // another worker won the race, which is the outcome we wanted
+        this.network = null;                    // let the next container creation try again
+        // 403 here is almost always the bridge-name collision: Linux caps an interface at 15 characters,
+        // so two SANDBOX_NETWORK values sharing their first 12 truncate to one bridge. Say so, because the
+        // daemon's own message ("networks have same bridge name") does not mention the setting to change.
+        if (status === 403) {
+          throw new Error(
+            `cannot create agent network "${this.networkName}" (bridge ${bridgeName(this.networkName)}): ` +
+            `${(e as DockerError).message ?? 'conflict'}. Another network already owns that bridge; ` +
+            'pick a SANDBOX_NETWORK that differs within its first 12 characters.',
+            { cause: e },
+          );
         }
+        throw e;
       }
     })();
     return this.network;
@@ -180,13 +203,16 @@ class DockerSandbox implements SandboxDriver {
     }
   }
 
-  private async waitExit(exec: Docker.Exec): Promise<number> {
+  // `pid` is what says whether the process ever existed. Docker reports a failure to START one — an
+  // exhausted pid cgroup after a fork bomb, a missing interpreter in the image — as exit 128 with the
+  // runc error written to the OUTPUT stream and Pid 0. See exec() for why that distinction matters.
+  private async waitExit(exec: Docker.Exec): Promise<{ exitCode: number; pid: number }> {
     for (let i = 0; i < EXEC_EXIT_POLLS; i++) {
       const info = await exec.inspect();
-      if (!info.Running) return info.ExitCode ?? -1;
+      if (!info.Running) return { exitCode: info.ExitCode ?? -1, pid: info.Pid ?? -1 };
       await sleep(EXEC_EXIT_POLL_MS);
     }
-    return -1;
+    return { exitCode: -1, pid: -1 };
   }
 
   async ensure(agentId: string): Promise<void> {
@@ -228,12 +254,29 @@ class DockerSandbox implements SandboxDriver {
     clearTimeout(killer);
 
     const elapsed = Date.now() - started;
-    const exitCode = hostKilled ? 137 : await this.waitExit(exec);
+    const finished = hostKilled ? { exitCode: 137, pid: -1 } : await this.waitExit(exec);
     const cpuAfter = hostKilled ? null : await this.cpuNs(container);
+    let { exitCode } = finished;
+    let stdout = out.text();
+    let stderr = err.text();
+
+    // Pid 0 means the daemon never started a process, so nothing on that stream can be the command's
+    // output — it is runc's own error text ("Cannot fork", "procReady not received") delivered on
+    // stdout. Handing that back as stdout is the worst kind of quiet failure: the agent reads an
+    // infrastructure message as the result of its own program and acts on it. This is a structural
+    // check on the exec record, not a match against the daemon's wording.
+    if (finished.pid === 0) {
+      const detail = (stderr || stdout).trim() || `the container refused to start the process (exit ${exitCode})`;
+      this.log.error({ agentId, exitCode, detail }, 'sandbox exec never started: the container is wedged');
+      stdout = '';
+      stderr = `sandbox could not start this command — the container is wedged and needs recreating: ${detail}`;
+      exitCode = EXEC_START_FAILED_EXIT;
+    }
+
     // `timeout` exits 124/137 when it fires; the same codes near the deadline mean the command was killed,
     // away from it they are the command's own exit (an OOM kill, say) and must not be reported as a timeout.
     const timedOut = hostKilled || ((exitCode === 137 || exitCode === 124) && elapsed + TIMEOUT_SLACK_MS >= opts.timeoutMs);
-    return { stdout: out.text(), stderr: err.text(), exitCode, cpuMs: cpuMsFromStats(cpuBefore, cpuAfter, elapsed), timedOut };
+    return { stdout, stderr, exitCode, cpuMs: cpuMsFromStats(cpuBefore, cpuAfter, elapsed), timedOut };
   }
 
   async writeFile(agentId: string, rel: string, content: string): Promise<void> {

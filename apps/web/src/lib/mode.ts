@@ -1,26 +1,46 @@
 import type { ChainPublic, GlobalStats } from '@runway/shared';
 
-export type ModeLabel = 'SIM' | 'DEVNET' | 'MAINNET';
+export type ModeLabel = 'DEMO' | 'SIM' | 'DEVNET' | 'MAINNET';
 
 export interface ModeInfo {
   label: ModeLabel;
-  /** Env banner copy (D29); null only for mainnet + real router. */
+  /** Env banner copy (D29); null ONLY when money, brains and the colony are all real. */
   banner: string | null;
   /** '.ticker-label' text (D29). */
   tickerLabel: string;
 }
 
-/** Mode line derived from chain + llm config, per AMENDMENTS D29. */
-export function modeInfo(stats: Pick<GlobalStats, 'chain' | 'llm'> | null): ModeInfo {
+type ModeStats = Pick<GlobalStats, 'chain' | 'llm'> & Partial<Pick<GlobalStats, 'demo'>>;
+
+/**
+ * The mode line, per AMENDMENTS D29 and the v2 no-fallback rule.
+ *
+ * The banner is COMPOSED from three independent facts rather than picked from a table, because the
+ * three can disagree: real devnet money behind mock brains, real brains over a simulated chain, a
+ * seeded demo colony on either. An earlier version keyed only off `chain.mode`, so a devnet run with
+ * LLM_PROVIDER=mock showed "DEVNET · CIRCLE TEST USDC" and said nothing at all about the agents being
+ * scripted — exactly the "I think I am running for real" state this banner exists to prevent.
+ *
+ * Every segment states something that has been checked. Nothing is implied by omission except the
+ * one case where all three are real, which is the only time the banner is hidden.
+ */
+export function modeInfo(stats: ModeStats | null): ModeInfo {
   if (!stats) return { label: 'SIM', banner: null, tickerLabel: 'LIVE' };
+
+  const demo = stats.demo === true;
+  const memory = stats.chain.mode === 'memory';
+  const mainnet = !memory && stats.chain.cluster === 'mainnet-beta';
   const mock = stats.llm.provider === 'mock';
-  if (stats.chain.mode === 'memory') {
-    return { label: 'SIM', banner: 'SIMULATION · IN-MEMORY CHAIN · MOCK LLM · NO REAL MONEY', tickerLabel: 'LIVE · SIM' };
-  }
-  if (stats.chain.cluster !== 'mainnet-beta') {
-    return { label: 'DEVNET', banner: 'DEVNET · CIRCLE TEST USDC · BALANCES ARE NOT REAL MONEY', tickerLabel: 'LIVE · DEVNET' };
-  }
-  return { label: 'MAINNET', banner: mock ? 'MOCK LLM · AGENTS ARE SCRIPTED' : null, tickerLabel: 'LIVE · MAINNET' };
+
+  const segments: string[] = [];
+  if (demo) segments.push('DEMO COLONY · SEEDED, NOT REAL CUSTOMERS');
+  if (memory) segments.push('SIMULATED CHAIN · NO REAL MONEY');
+  else if (!mainnet) segments.push(`${stats.chain.cluster.toUpperCase()} · TEST USDC, NOT REAL MONEY`);
+  if (mock) segments.push('MOCK BRAINS · AGENTS ARE SCRIPTED, NOT THINKING');
+
+  const label: ModeLabel = demo ? 'DEMO' : memory ? 'SIM' : mainnet ? 'MAINNET' : 'DEVNET';
+  const tickerLabel = demo ? 'LIVE · DEMO' : `LIVE · ${label}`;
+  return { label, banner: segments.length > 0 ? segments.join(' · ') : null, tickerLabel };
 }
 
 /** Short chain badge text for the topbar: devnet / mainnet / memory. */

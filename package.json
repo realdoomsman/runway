@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "pnpm -r --parallel --if-present dev",
     "demo": "pnpm --filter @runway/api demo",
+    "doctor": "pnpm --filter @runway/api --silent run doctor",
+    "ready": "pnpm --filter @runway/api --silent run doctor",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",

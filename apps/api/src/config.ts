@@ -8,6 +8,7 @@ import {
   MIN_PURCHASE_MICRO, PURCHASE_TTL_HOURS, microToUsd, usd,
 } from '@runway/shared';
 import { REPO_ROOT } from './lib/env.js';
+import { ConfigError } from './lib/errors.js';
 import { AGENT_NETWORK_DEFAULT } from './sandbox/egress.js';
 
 export const USDC_MINTS = {
@@ -28,9 +29,11 @@ export const DEMO_CUSTOMER_WALLETS: readonly string[] = [
   'blue-tarp', 'oakline-devs', 'paper-route', 'seventh-street', 'lowlight-games', 'ridgeway-analytics',
 ];
 
-// Insecure but deterministic dev-only fallbacks so `pnpm demo` works with an empty .env.
-const DEV_SESSION_SECRET = 'runway-dev-session-secret-not-for-production!!';
-const DEV_KEY_ENCRYPTION_KEY = '0'.repeat(64);
+// Insecure but deterministic dev-only defaults so `pnpm demo` works with an empty .env. They are
+// PUBLIC CONSTANTS — anyone with this repository has them — so core/preflight.ts refuses to boot with
+// either of them once CHAIN_MODE=solana, where they would be protecting real keys and real sessions.
+export const DEV_SESSION_SECRET = 'runway-dev-session-secret-not-for-production!!';
+export const DEV_KEY_ENCRYPTION_KEY = '0'.repeat(64);
 
 const bool = z.preprocess((v) => (typeof v === 'string' ? ['1', 'true', 'yes'].includes(v.toLowerCase()) : v), z.boolean());
 const optional = (schema: z.ZodString) => z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
@@ -52,7 +55,9 @@ const envSchema = z.object({
   KEY_ENCRYPTION_KEY: optional(z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex chars (openssl rand -hex 32)')),
   CHAIN_MODE: z.enum(['memory', 'solana']).default('memory'),
   SOLANA_CLUSTER: z.enum(['devnet', 'mainnet-beta']).default('devnet'),
-  SOLANA_RPC_URL: z.string().url().default('https://api.devnet.solana.com'),
+  // Empty falls through to the default so a blank line in .env gets the readable "name it out loud"
+  // refusal below rather than a bare zod "Invalid URL".
+  SOLANA_RPC_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().default('https://api.devnet.solana.com')),
   USDC_MINT: optional(z.string()),
   TREASURY_WALLET_SECRET: optional(z.string()),
   FOUNDER_FEE_WALLET: optional(z.string()),
@@ -148,7 +153,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`);
-    throw new Error(`Invalid environment:\n${lines.join('\n')}`);
+    throw new ConfigError(`Invalid environment:\n${lines.join('\n')}`);
   }
   const e = parsed.data;
   const isProduction = e.NODE_ENV === 'production';
@@ -158,12 +163,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   const keyEncryptionKey = e.KEY_ENCRYPTION_KEY ?? devFallback('KEY_ENCRYPTION_KEY', DEV_KEY_ENCRYPTION_KEY, isProduction, warnings);
 
   if (e.SANDBOX_DRIVER === 'local' && isProduction) {
-    throw new Error('SANDBOX_DRIVER=local is not isolated and is refused when NODE_ENV=production; use docker');
+    throw new ConfigError('SANDBOX_DRIVER=local is not isolated and is refused when NODE_ENV=production; use docker');
   }
   // `bash` must not be able to reach what fetch_url refuses (cloud metadata, RFC1918, the host
   // gateway). Docker cannot express that, so production has to confirm the host rules are in place.
   if (e.SANDBOX_DRIVER === 'docker' && isProduction && !e.SANDBOX_EGRESS_FILTERED) {
-    throw new Error(
+    throw new ConfigError(
       'SANDBOX_EGRESS_FILTERED=1 is required in production: install the egress rules for the agent network '
       + '(see docs/OPERATIONS.md and apps/api/src/sandbox/egress.ts) before agents can run bash',
     );
@@ -176,31 +181,40 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       ['FOUNDER_FEE_WALLET', e.FOUNDER_FEE_WALLET],
     ] as const;
     for (const [k, v] of required) {
-      if (!v) throw new Error(`${k} is required when CHAIN_MODE=solana`);
+      if (!v) throw new ConfigError(`${k} is required when CHAIN_MODE=solana`);
+    }
+    // The schema default is a devnet endpoint. Inheriting it while asking for a real chain is how a
+    // mainnet deployment ends up quietly reading devnet, so the endpoint has to be stated out loud.
+    if (!source['SOLANA_RPC_URL']) {
+      throw new ConfigError(
+        'SOLANA_RPC_URL is required when CHAIN_MODE=solana: name the endpoint explicitly rather than inheriting the '
+        + `devnet default. Free public: https://api.${e.SOLANA_CLUSTER === 'mainnet-beta' ? 'mainnet-beta' : e.SOLANA_CLUSTER}`
+        + '.solana.com (rate limited); for anything real use a Helius or QuickNode URL.',
+      );
     }
   }
   // Real money moves on mainnet: the operator has to say so out loud.
   if (e.SOLANA_CLUSTER === 'mainnet-beta' && !e.ALLOW_MAINNET) {
-    throw new Error(
+    throw new ConfigError(
       'SOLANA_CLUSTER=mainnet-beta moves real money: set ALLOW_MAINNET=1 to confirm you meant mainnet, '
       + 'or use SOLANA_CLUSTER=devnet',
     );
   }
   if (e.HEARTBEAT_OVERRIDE_MIN !== undefined && isProduction) {
-    throw new Error('HEARTBEAT_OVERRIDE_MIN is a development-only override and is refused when NODE_ENV=production');
+    throw new ConfigError('HEARTBEAT_OVERRIDE_MIN is a development-only override and is refused when NODE_ENV=production');
   }
   if (e.LLM_PROVIDER === 'router' && !e.ANTHROPIC_API_KEY && !e.OPENAI_API_KEY && !e.OPENROUTER_API_KEY) {
-    throw new Error('LLM_PROVIDER=router needs at least one of ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY');
+    throw new ConfigError('LLM_PROVIDER=router needs at least one of ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY');
   }
-  if (e.SEARCH_PROVIDER === 'brave' && !e.BRAVE_API_KEY) throw new Error('SEARCH_PROVIDER=brave needs BRAVE_API_KEY');
-  if (e.SEARCH_PROVIDER === 'tavily' && !e.TAVILY_API_KEY) throw new Error('SEARCH_PROVIDER=tavily needs TAVILY_API_KEY');
+  if (e.SEARCH_PROVIDER === 'brave' && !e.BRAVE_API_KEY) throw new ConfigError('SEARCH_PROVIDER=brave needs BRAVE_API_KEY');
+  if (e.SEARCH_PROVIDER === 'tavily' && !e.TAVILY_API_KEY) throw new ConfigError('SEARCH_PROVIDER=tavily needs TAVILY_API_KEY');
   if (e.DEMO && (e.CHAIN_MODE !== 'memory' || e.LLM_PROVIDER !== 'mock')) {
-    throw new Error('DEMO=1 requires CHAIN_MODE=memory and LLM_PROVIDER=mock');
+    throw new ConfigError('DEMO=1 requires CHAIN_MODE=memory and LLM_PROVIDER=mock');
   }
   const minPurchaseMicro = usd(e.MIN_PURCHASE_USD);
   const maxPurchaseMicro = usd(e.MAX_PURCHASE_USD);
   if (maxPurchaseMicro < minPurchaseMicro) {
-    throw new Error(`MAX_PURCHASE_USD (${e.MAX_PURCHASE_USD}) must be at least MIN_PURCHASE_USD (${e.MIN_PURCHASE_USD})`);
+    throw new ConfigError(`MAX_PURCHASE_USD (${e.MAX_PURCHASE_USD}) must be at least MIN_PURCHASE_USD (${e.MIN_PURCHASE_USD})`);
   }
 
   return {
@@ -260,7 +274,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
 }
 
 function devFallback(name: string, fallback: string, isProduction: boolean, warnings: string[]): string {
-  if (isProduction) throw new Error(`${name} is required when NODE_ENV=production`);
+  if (isProduction) throw new ConfigError(`${name} is required when NODE_ENV=production`);
   warnings.push(`${name} not set: using an insecure development default`);
   return fallback;
 }
