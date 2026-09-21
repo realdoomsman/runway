@@ -4,7 +4,7 @@
 import type { Deps, Services } from '../core/interfaces.js';
 import { custodialWallet, withdrawCustodial } from './custodial.js';
 import { loadDetail } from './agents.js';
-import { launchAgentToken } from './token.js';
+import { launchAgentToken, linkAgentToken } from './token.js';
 import { listEvents } from './events.js';
 import { listLedger } from './ledger.js';
 import { callService, listBounties, listServices, postBounty, reviewBounty } from './market.js';
@@ -57,6 +57,7 @@ export function createServices(deps: Deps): Services {
     custodialWallet: (ownerId) => custodialWallet(deps, ownerId),
     withdrawCustodial: (ownerId, to, amountMicro) => withdrawCustodial(deps, ownerId, to, amountMicro),
     launchToken: (agentId, ownerId, ticker) => launchAgentToken(deps, agentId, ownerId, ticker),
+    linkToken: (agentId, ownerId, mint, ticker) => linkAgentToken(deps, agentId, ownerId, mint, ticker),
   };
 }
 

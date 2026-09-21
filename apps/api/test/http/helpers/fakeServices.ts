@@ -115,6 +115,7 @@ export function createFakeServices(): FakeServices {
     async custodialWallet() { return { pubkey: 'CustodiaLWa11etPubkey1111111111111111111111', usdcMicro: 5_000_000, solLamports: 0 }; },
     async withdrawCustodial(_ownerId, _to, amountMicro) { return { sentMicro: amountMicro ?? 1_000_000, txSig: 'sig-custodial-withdraw' }; },
     async launchToken(_agentId, _ownerId, ticker) { return { mint: 'MintTok1111111111111111111111111111111111111', name: 'TOK', ticker: ticker ?? 'TOK', launchedAt: '2026-09-01T00:00:00.000Z', pumpUrl: 'https://pump.fun/MintTok1111111111111111111111111111111111111' }; },
+    async linkToken(_agentId, _ownerId, mint, ticker) { return { mint, name: 'TOK', ticker: ticker ?? 'TOK', launchedAt: '2026-09-01T00:00:00.000Z', pumpUrl: `https://pump.fun/${mint}` }; },
   };
 
   for (const method of Object.keys(impl) as (keyof Services)[]) {

@@ -229,6 +229,8 @@ export interface Services {
   withdrawCustodial(ownerId: string, to: string, amountMicro: Micro): Promise<CustodialWithdrawResponse>;
   /** Launches the agent's one official Pump.fun token (owner-only, permanent). economy/token.ts. */
   launchToken(agentId: string, ownerId: string, ticker?: string): Promise<AgentTokenInfo>;
+  /** Links an externally-minted Pump.fun token to the agent (owner-only, permanent). economy/token.ts. */
+  linkToken(agentId: string, ownerId: string, mint: string, ticker?: string): Promise<AgentTokenInfo>;
 }
 
 // ---- Runtime / HTTP --------------------------------------------------------

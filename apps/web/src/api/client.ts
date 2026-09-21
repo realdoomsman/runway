@@ -150,6 +150,9 @@ export const api = {
   /** Launch this agent's one official Pump.fun token (owner-only). 409 if it already has one. */
   launchToken: (id: string, ticker?: string) =>
     post<AgentTokenInfo>(`/api/agents/${enc(id)}/launch-token`, ticker ? { ticker } : {}),
+  /** Link a Pump.fun token you already minted to this agent (owner-only). 409 if it already has one. */
+  linkToken: (id: string, mint: string, ticker?: string) =>
+    post<AgentTokenInfo>(`/api/agents/${enc(id)}/link-token`, ticker ? { mint, ticker } : { mint }),
 
   graveyard: (q: GraveyardQuery = {}) => get<GraveyardEntry[]>('/api/graveyard', q),
   leaderboard: (by: LeaderboardBy, limit = 25) => get<AgentPublic[]>('/api/leaderboard', { by, limit }),

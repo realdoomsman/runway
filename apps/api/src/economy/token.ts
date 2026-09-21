@@ -6,7 +6,7 @@
 // purpose, public page). No coin is ever created unless an owner explicitly calls launchAgentToken AND
 // token launches are enabled on the deployment (config.token.launchEnabled).
 import { eq, isNotNull } from 'drizzle-orm';
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { type AgentTokenInfo, type TreasurySplit } from '@runway/shared';
 import { keypairFromSecret } from '../chain/keys.js';
 import { withAgentSecret } from '../chain/keystore.js';
@@ -22,6 +22,9 @@ const TICKER_RE = /^[A-Z0-9]{2,10}$/;
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const CLAIM_GAS_KEEP_LAMPORTS = 6_000_000;   // ~0.006 SOL the agent keeps for its own gas
 const MIN_CLAIM_LAMPORTS = 2_000_000;        // don't bother converting a claim smaller than ~0.002 SOL
+const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+// A real SPL mint account is owned by one of these programs (classic SPL Token or Token-2022).
+const TOKEN_PROGRAM_IDS = new Set(['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb']);
 
 export const pumpUrl = (mint: string): string => `https://pump.fun/${mint}`;
 const defaultTicker = (name: string): string => (name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) || 'AGENT');
@@ -84,6 +87,37 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
     .where(eq(agents.id, agentId));
   await addEvent(deps, deps.db, { kind: 'update', agentId, agentName: agent.name, text: `${agent.name} launched its official token $${ticker}`, meta: { mint: mintStr, ticker } });
   deps.log.info({ agentId, mint: mintStr, ticker }, 'agent token launched');
+  return { mint: mintStr, name: agent.name, ticker, launchedAt: now.toISOString(), pumpUrl: pumpUrl(mintStr) };
+}
+
+// Link an externally-created Pump.fun token to the agent (owner-only, permanent) — for owners who mint
+// the coin themselves on pump.fun instead of through launchAgentToken. Same binding (one agent = one
+// token). The creator-fee claim loop only actually collects fees when the token's on-chain creator is
+// THIS agent's wallet, so to keep the funding loop the coin must be minted from (or have its fee
+// recipient set to) the agent wallet shown on the agent page.
+export async function linkAgentToken(deps: CoreDeps, agentId: string, ownerId: string, mintInput: string, tickerInput?: string): Promise<AgentTokenInfo> {
+  if (!deps.config.token.launchEnabled) throw badRequest('Token launches are not enabled on this deployment.');
+  const [agent] = await deps.db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
+  if (!agent) throw notFound('Agent');
+  if (agent.ownerWallet !== ownerId) throw forbidden("Only the agent's creator can link its token.");
+  if (agent.tokenMint) throw conflict('CONFLICT', 'This agent already has an official token — one agent, one token.');
+
+  const mintStr = mintInput.trim();
+  if (!MINT_RE.test(mintStr)) throw badRequest('That is not a valid token mint address.');
+  const ticker = tickerInput?.trim().toUpperCase() || defaultTicker(agent.name);
+  if (!TICKER_RE.test(ticker)) throw badRequest('Ticker must be 2-10 letters or digits.');
+
+  // Verify the mint exists on-chain and is a real SPL token mint (not a wallet or a typo).
+  const info = await new Connection(deps.config.chain.rpcUrl, 'confirmed').getAccountInfo(new PublicKey(mintStr), 'confirmed');
+  if (!info) throw badRequest('No account exists at that mint address on-chain.');
+  if (!TOKEN_PROGRAM_IDS.has(info.owner.toBase58())) throw badRequest('That address is not an SPL token mint.');
+
+  const now = deps.clock.now();
+  await deps.db.update(agents)
+    .set({ tokenMint: mintStr, tokenTicker: ticker, tokenName: agent.name, tokenLaunchedAt: now })
+    .where(eq(agents.id, agentId));
+  await addEvent(deps, deps.db, { kind: 'update', agentId, agentName: agent.name, text: `${agent.name} linked its official token $${ticker}`, meta: { mint: mintStr, ticker, linked: true } });
+  deps.log.info({ agentId, mint: mintStr, ticker }, 'agent token linked');
   return { mint: mintStr, name: agent.name, ticker, launchedAt: now.toISOString(), pumpUrl: pumpUrl(mintStr) };
 }
 
