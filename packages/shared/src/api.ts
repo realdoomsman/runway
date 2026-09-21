@@ -1,7 +1,8 @@
 // HTTP request/response shapes for every route in SPEC-V2 §8 (was SPEC §8.15 + AMENDMENTS C25).
 // Query types describe parsed query strings (numbers already coerced).
 import type {
-  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, ChainMode, CustodialWallet, FeedEvent, GlobalStats,
+  AgentDetail, AgentLiveState, AgentPublic, AgentTokenInfo, Bounty, BountyStatus, ChainMode, CustodialWallet, FeedEvent,
+  GlobalStats,
   GraveyardEntry, LedgerEntry, LlmMode, Me, Micro, ModelInfo, PurchasePath, PurchasePublic, SandboxName, SeriesPoint,
   Service,
   StepPublic, StepTranscript, ToolName, TreasuryPublic, TreasuryTx,
@@ -128,6 +129,10 @@ export type SetPayoutWalletResponse = Me;
 export type CustodialWalletResponse = CustodialWallet;
 export interface CustodialWithdrawRequest { to: string; amountMicro: Micro }
 export interface CustodialWithdrawResponse { sentMicro: Micro; txSig: string }
+
+// ---- agent token launch (Pump.fun): POST /api/agents/:id/launch-token ----------------------------
+export interface LaunchTokenRequest { ticker?: string }
+export type LaunchTokenResponse = AgentTokenInfo;
 
 // ---- public service endpoint (POST /svc/:serviceId) ------------------------
 export const SERVICE_PAYMENT_HEADER = 'x-payment-tx';

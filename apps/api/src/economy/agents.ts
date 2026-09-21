@@ -8,7 +8,7 @@ import {
 import type { CoreDeps } from '../core/interfaces.js';
 import type { DbLike } from '../db/client.js';
 import {
-  agents, bounties, decisions, deployments, forks, ledger, ownerMessages, projects, services, steps, type AgentRow,
+  agents, bounties, decisions, deployments, forks, ledger, ownerMessages, projects, services, steps, trades, type AgentRow,
 } from '../db/schema.js';
 import { ageDaysOf, computeBurn, round1, type Burn, type BurnRates } from './burn.js';
 import { listDecisions } from './events.js';
@@ -17,8 +17,10 @@ import { liveSteps } from './live.js';
 import { toBounty, toDeployment, toProject, toService } from './mappers.js';
 import { afterCommit } from './tx.js';
 import { withdrawableOf } from './withdraw.js';
+import { openPositions } from './trading.js';
+import { tokenInfoOf, treasurySplit } from './token.js';
 
-type Deps = Pick<CoreDeps, 'db' | 'clock' | 'config' | 'llm' | 'bus'>;
+type Deps = Pick<CoreDeps, 'db' | 'clock' | 'config' | 'llm' | 'bus' | 'chain'>;
 
 export interface PhaseInputs { lastPivotAt: Date | null; operating: boolean; building: boolean }
 interface Extras extends PhaseInputs { forkCount: number; activeDeployments: number; stepCosts: Micro[]; trailingSpend: Micro }
@@ -223,6 +225,8 @@ export async function loadDetail(deps: Deps, a: AgentRow, viewerOwnerId: string 
   names.set(a.id, a.name);
   const lookup = (id: string) => names.get(id) ?? null;
   const parent: AgentRef | null = parentRow[0] ?? null;
+  const positions = await openPositions(deps, a.id);
+  const tradeRows = await db.select().from(trades).where(eq(trades.agentId, a.id)).orderBy(desc(trades.id)).limit(20);
   return {
     ...pub,
     isOwner,
@@ -240,6 +244,10 @@ export async function loadDetail(deps: Deps, a: AgentRow, viewerOwnerId: string 
     parent,
     children: childRows,
     deployments: deploymentRows.map((d) => toDeployment(deps.config, d)),
+    positions,
+    trades: tradeRows.map((t) => ({ id: t.id, ts: t.ts.toISOString(), action: t.action, symbol: t.symbol, usdcMicro: t.usdcMicro, realizedPnlMicro: t.realizedPnlMicro, txSig: t.txSig })),
+    token: tokenInfoOf(a),
+    treasurySplit: treasurySplit(a.treasuryMicro),
   };
 }
 

@@ -45,6 +45,7 @@ const patchBody = z.object({ shareStrategy: z.boolean().optional(), heartbeatMin
   .refine((b) => b.shareStrategy !== undefined || b.heartbeatMin !== undefined, 'Nothing to update');
 const messageBody = z.object({ text: z.string().trim().min(1).max(1000) });
 const recapitalizeBody = z.object({ txSig: z.string().min(1).max(128) });
+const launchTokenBody = z.object({ ticker: z.string().trim().max(10).optional() });
 const topUpBody = z.object({
   amountMicro: z.number().int().min(1),
   path: z.enum(['deposit', 'wallet']).default('deposit'),
@@ -163,6 +164,12 @@ export async function agentRoutes(app: FastifyInstance, deps: Deps, auth: Auth):
     const expected = `TERMINATE ${agent.name}`;
     if (confirm !== expected) throw badRequest(`Type "${expected}" to confirm`, 'CONFIRM_MISMATCH');
     return services().terminate(agent.id, ownerId);
+  });
+
+  app.post('/api/agents/:id/launch-token', authed, async (request) => {
+    const { agent, ownerId } = await ownedAgent(request);
+    const { ticker } = launchTokenBody.parse(request.body);
+    return services().launchToken(agent.id, ownerId, ticker);
   });
 
   app.patch('/api/agents/:id', authed, async (request) => {

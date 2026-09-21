@@ -89,6 +89,9 @@ const envSchema = z.object({
   // Sign in with Google (OAuth 2.0). Both required to enable the button; absent = feature off.
   GOOGLE_CLIENT_ID: optional(z.string()),
   GOOGLE_CLIENT_SECRET: optional(z.string()),
+  // Agent token launches (Pump.fun via PumpPortal) + IPFS metadata (Pinata). Both required to enable.
+  PUMPPORTAL_API_KEY: optional(z.string()),
+  PINATA_JWT: optional(z.string()),
   SANDBOX_DRIVER: z.enum(['docker', 'local']).default('local'),
   SANDBOX_IMAGE: z.string().default('runway-sandbox:latest'),
   SANDBOX_NETWORK: z.string().min(1).max(60).default(AGENT_NETWORK_DEFAULT),
@@ -154,6 +157,7 @@ export interface Config {
   };
   search: { provider: Env['SEARCH_PROVIDER']; braveApiKey: string | null; tavilyApiKey: string | null };
   auth: { google: { clientId: string; clientSecret: string } | null };
+  token: { pumpPortalKey: string | null; pinataJwt: string | null; launchEnabled: boolean };
   sandbox: { driver: Env['SANDBOX_DRIVER']; image: string; network: string; egressFiltered: boolean };
   dataDir: string;                  // absolute
   sitesBaseUrl: string;
@@ -291,6 +295,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       google: e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET
         ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
         : null,
+    },
+    token: {
+      pumpPortalKey: e.PUMPPORTAL_API_KEY ?? null,
+      pinataJwt: e.PINATA_JWT ?? null,
+      launchEnabled: !!(e.PUMPPORTAL_API_KEY && e.PINATA_JWT),
     },
     sandbox: {
       driver: e.SANDBOX_DRIVER, image: e.SANDBOX_IMAGE, network: e.SANDBOX_NETWORK,

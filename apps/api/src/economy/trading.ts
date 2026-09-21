@@ -128,7 +128,7 @@ async function sell(deps: CoreDeps, agent: AgentRow, mint: string, sym: string, 
 }
 
 // Marks an agent's open positions to market: current USDC value and unrealized P&L per position.
-export async function openPositions(deps: CoreDeps, agentId: string): Promise<Array<{ mint: string; symbol: string; tokenAmount: number; costMicro: number; valueMicro: number; unrealizedMicro: number; openedAt: string }>> {
+export async function openPositions(deps: Pick<CoreDeps, 'db' | 'chain'>, agentId: string): Promise<Array<{ mint: string; symbol: string; tokenAmount: number; costMicro: number; valueMicro: number; unrealizedMicro: number; openedAt: string }>> {
   const rows = await deps.db.select().from(positions).where(eq(positions.agentId, agentId));
   return Promise.all(rows.map(async (p) => {
     const valueMicro = await deps.chain.quoteUsdcOut(p.mint, p.tokenAmount);

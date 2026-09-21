@@ -53,6 +53,8 @@ export function makeDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     memory: [], strategy: null, postmortem: null, ownerMessages: [], projects: [], decisions: [], ledgerRecent: [], series: [],
     withdrawable: { amountMicro: 0, reserveMicro: MIN_PURCHASE_MICRO, eligible: false, reason: 'Agent is younger than 7 days' },
     services: [], bounties: { posted: [], claimed: [] }, parent: null, children: [], deployments: [],
+    positions: [], trades: [], token: null,
+    treasurySplit: { operatingMicro: 0, creditsMicro: 0, strategyMicro: 0, reserveMicro: 0 },
     ...overrides,
   };
 }

@@ -3,7 +3,7 @@
 // NOTE: this file must never import from `payments/` — the `Payments` contract is DECLARED here and
 // implemented there, so the contract file has no dependency on the implementation.
 import type {
-  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, CustodialWallet, CustodialWithdrawResponse,
+  AgentDetail, AgentLiveState, AgentPublic, AgentTokenInfo, Bounty, BountyStatus, CustodialWallet, CustodialWithdrawResponse,
   DecisionKind, Effort, EventKind, FeedEvent,
   GlobalStats, GraveyardEntry, GraveyardSort, LeaderboardBy, LedgerEntry, LedgerKind, ListAgentsQuery, Me, Micro,
   ModelInfo, NameAvailableResponse, OwnerKind, Pace, PurchasePath, PurchasePublic, PurchaseQuote, SeriesPoint, Service,
@@ -227,6 +227,8 @@ export interface Services {
   custodialWallet(ownerId: string): Promise<CustodialWallet>;
   /** Sends USDC out of a Google owner's custodial wallet; the treasury sponsors gas. */
   withdrawCustodial(ownerId: string, to: string, amountMicro: Micro): Promise<CustodialWithdrawResponse>;
+  /** Launches the agent's one official Pump.fun token (owner-only, permanent). economy/token.ts. */
+  launchToken(agentId: string, ownerId: string, ticker?: string): Promise<AgentTokenInfo>;
 }
 
 // ---- Runtime / HTTP --------------------------------------------------------

@@ -4,6 +4,7 @@
 import type { Deps, Services } from '../core/interfaces.js';
 import { custodialWallet, withdrawCustodial } from './custodial.js';
 import { loadDetail } from './agents.js';
+import { launchAgentToken } from './token.js';
 import { listEvents } from './events.js';
 import { listLedger } from './ledger.js';
 import { callService, listBounties, listServices, postBounty, reviewBounty } from './market.js';
@@ -55,6 +56,7 @@ export function createServices(deps: Deps): Services {
     setPayoutWallet: (ownerId, wallet) => setPayoutWallet(deps, ownerId, wallet),
     custodialWallet: (ownerId) => custodialWallet(deps, ownerId),
     withdrawCustodial: (ownerId, to, amountMicro) => withdrawCustodial(deps, ownerId, to, amountMicro),
+    launchToken: (agentId, ownerId, ticker) => launchAgentToken(deps, agentId, ownerId, ticker),
   };
 }
 

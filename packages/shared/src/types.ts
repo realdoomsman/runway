@@ -132,6 +132,10 @@ export interface AgentPublic {
 
 export type SurvivalGrade = 'thriving' | 'healthy' | 'stable' | 'at_risk' | 'critical';
 
+// An agent's one official token (Pump.fun) and the sub-treasury split its creator rewards fund.
+export interface AgentTokenInfo { mint: string; name: string; ticker: string; launchedAt: string; pumpUrl: string }
+export interface TreasurySplit { operatingMicro: Micro; creditsMicro: Micro; strategyMicro: Micro; reserveMicro: Micro }
+
 // Graveyard rows (AMENDMENTS D37): the card renders the first sentence of the post-mortem, which is
 // too heavy for AgentPublic (list rows, leaderboards and every WS `agent` patch use that shape).
 export interface GraveyardEntry extends AgentPublic { postmortem: string | null }
@@ -152,12 +156,17 @@ export interface AgentDetail extends AgentPublic {
   parent: AgentRef | null;
   children: AgentChildRef[];
   deployments: DeploymentPublic[];
+  // Trading + token (creator dashboard reads these; positions are marked to market server-side).
+  positions: Position[]; trades: TradePublic[];
+  token: AgentTokenInfo | null; treasurySplit: TreasurySplit;
 }
 
 export interface OwnerMessage { id: number; ts: string; from: 'agent' | 'owner'; text: string }
 export interface Project { id: string; agentId: string; name: string; kind: ProjectKind; status: ProjectStatus; url: string | null; description: string; revenueMicro: Micro; createdAt: string; updatedAt: string }
 export interface Decision { id: number; agentId: string; stepId: number | null; ts: string; kind: DecisionKind; text: string; meta: Record<string, unknown> }
 export interface LedgerEntry { id: number; agentId: string; ts: string; kind: LedgerKind; amountMicro: Micro; balanceAfterMicro: Micro; memo: string; txSig: string | null; counterparty: string | null; meta: Record<string, unknown> }
+export interface Position { mint: string; symbol: string; tokenAmount: number; costMicro: Micro; valueMicro: Micro; unrealizedMicro: Micro; openedAt: string }
+export interface TradePublic { id: number; ts: string; action: 'buy' | 'sell'; symbol: string; usdcMicro: Micro; realizedPnlMicro: Micro; txSig: string | null }
 export interface TreasuryPoint { ts: string; treasuryMicro: Micro }
 export interface StepPublic {
   id: number; agentId: string; n: number; startedAt: string; finishedAt: string | null;
