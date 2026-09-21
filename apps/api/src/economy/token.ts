@@ -6,7 +6,8 @@
 // purpose, public page). No coin is ever created unless an owner explicitly calls launchAgentToken AND
 // token launches are enabled on the deployment (config.token.launchEnabled).
 import { eq, isNotNull } from 'drizzle-orm';
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, NATIVE_MINT, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { type AgentTokenInfo, type TreasurySplit } from '@runway/shared';
 import { keypairFromSecret } from '../chain/keys.js';
 import { withAgentSecret } from '../chain/keystore.js';
@@ -22,6 +23,10 @@ const TICKER_RE = /^[A-Z0-9]{2,10}$/;
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const CLAIM_GAS_KEEP_LAMPORTS = 6_000_000;   // ~0.006 SOL the agent keeps for its own gas
 const MIN_CLAIM_LAMPORTS = 2_000_000;        // don't bother converting a claim smaller than ~0.002 SOL
+const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+const PUMP_FEES_PROGRAM = new PublicKey('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
+const SYSTEM_PROGRAM = new PublicKey('11111111111111111111111111111111');
+const DISTRIBUTE_DISCRIMINATOR = Buffer.from('ffcb134ff444089f', 'hex');   // distribute_creator_fees_v2
 
 export const pumpUrl = (mint: string): string => `https://pump.fun/${mint}`;
 const defaultTicker = (name: string): string => (name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) || 'AGENT');
@@ -87,6 +92,75 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
   return { mint: mintStr, name: agent.name, ticker, launchedAt: now.toISOString(), pumpUrl: pumpUrl(mintStr) };
 }
 
+// --- Pump.fun creator-fee sharing, built directly (no SDK, so it never touches the payments SDK's
+// Anchor version). Modern coins route creator fees through a `sharing_config` PDA that splits them
+// among shareholders; the permissionless `distribute_creator_fees_v2` pays the creator vault out to
+// every shareholder. Accounts + discriminator verified byte-for-byte against @pump-fun/pump-sdk. ---
+const pumpPda = (seeds: Array<Buffer | Uint8Array>, program = PUMP_PROGRAM): PublicKey =>
+  PublicKey.findProgramAddressSync(seeds, program)[0];
+
+// SharingConfig layout: 8-byte anchor discriminator, bump(1), version(1), status(1), mint(32),
+// admin(32), adminRevoked(1), then a Vec<{ address: Pubkey(32), shareBps: u16 }> (u32 length prefix).
+function readShareholders(data: Buffer): PublicKey[] {
+  let o = 8 + 1 + 1 + 1 + 32 + 32 + 1;
+  const count = data.readUInt32LE(o); o += 4;
+  const out: PublicKey[] = [];
+  for (let i = 0; i < count && i < 10; i++) { out.push(new PublicKey(data.subarray(o, o + 32))); o += 34; }
+  return out;
+}
+
+// distribute_creator_fees_v2 for a SOL-paired coin, or null when the coin has no sharing_config.
+async function distributeCreatorFeesIx(conn: Connection, mint: PublicKey, payer: PublicKey): Promise<TransactionInstruction | null> {
+  const sharingConfig = pumpPda([Buffer.from('sharing-config'), mint.toBuffer()], PUMP_FEES_PROGRAM);
+  const info = await conn.getAccountInfo(sharingConfig, 'confirmed');
+  if (!info) return null;
+  const shareholders = readShareholders(info.data);
+  const bondingCurve = pumpPda([Buffer.from('bonding-curve'), mint.toBuffer()]);
+  const creatorVault = pumpPda([Buffer.from('creator-vault'), sharingConfig.toBuffer()]);
+  const eventAuthority = pumpPda([Buffer.from('__event_authority')]);
+  const creatorVaultAta = getAssociatedTokenAddressSync(NATIVE_MINT, creatorVault, true, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+  const keys = [
+    { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: mint, isSigner: false, isWritable: false },
+    { pubkey: bondingCurve, isSigner: false, isWritable: false },
+    { pubkey: sharingConfig, isSigner: false, isWritable: false },
+    { pubkey: creatorVault, isSigner: false, isWritable: true },
+    { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
+    { pubkey: eventAuthority, isSigner: false, isWritable: false },
+    { pubkey: PUMP_PROGRAM, isSigner: false, isWritable: false },
+    { pubkey: creatorVaultAta, isSigner: false, isWritable: true },
+    { pubkey: NATIVE_MINT, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ...shareholders.map((s) => ({ pubkey: s, isSigner: false, isWritable: true })),
+  ];
+  return new TransactionInstruction({ programId: PUMP_PROGRAM, keys, data: Buffer.concat([DISTRIBUTE_DISCRIMINATOR, Buffer.from([1])]) });
+}
+
+// Pull the agent's pending Pump.fun creator fees into its OWN wallet, signed by the agent. Fee-sharing
+// coins use distribute_creator_fees_v2; legacy single-recipient coins fall back to collect_creator_fee.
+async function claimPumpFees(conn: Connection, agentKp: Keypair, mintStr: string): Promise<void> {
+  const ix = await distributeCreatorFeesIx(conn, new PublicKey(mintStr), agentKp.publicKey);
+  if (ix) {
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+    const msg = new TransactionMessage({ payerKey: agentKp.publicKey, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message();
+    const tx = new VersionedTransaction(msg);
+    tx.sign([agentKp]);
+    const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+    await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    return;
+  }
+  const resp = await fetch(PUMPPORTAL_LOCAL, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ publicKey: agentKp.publicKey.toBase58(), action: 'collectCreatorFee', priorityFee: 0.0005 }),
+  });
+  if (!resp.ok) throw new Error(`creator-fee claim build failed (${resp.status})`);
+  const tx = VersionedTransaction.deserialize(new Uint8Array(await resp.arrayBuffer()));
+  tx.sign([agentKp]);
+  const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+  await conn.confirmTransaction(sig, 'confirmed');
+}
+
 // Claims the agent's accumulated Pump.fun creator fees (paid in SOL) into its own wallet, converts the
 // proceeds to USDC and books them into the treasury as `creator_reward`. Signed by the agent (the
 // creator). Returns how much USDC was booked. Run by the periodic `creator_fees` job.
@@ -95,24 +169,12 @@ export async function claimCreatorFees(deps: CoreDeps, agentId: string): Promise
   if (!agent?.tokenMint) return { ok: false, bookedMicro: 0 };
   const conn = new Connection(deps.config.chain.rpcUrl, 'confirmed');
   try {
-    const solBefore = await deps.chain.getSolBalance(agent.walletPubkey);
-    await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, async (secret) => {
-      const agentKp = keypairFromSecret(secret);
-      const built = await fetch(PUMPPORTAL_LOCAL, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ publicKey: agentKp.publicKey.toBase58(), action: 'collectCreatorFee', priorityFee: 0.0005 }),
-      });
-      if (!built.ok) throw new Error(`claim build failed (${built.status})`);
-      const tx = VersionedTransaction.deserialize(new Uint8Array(await built.arrayBuffer()));
-      tx.sign([agentKp]);
-      const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
-      await conn.confirmTransaction(sig, 'confirmed');
-      return sig;
-    });
-    // Fees land as SOL. Convert everything above the gas reserve to USDC and book it as revenue.
+    await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, (secret) =>
+      claimPumpFees(conn, keypairFromSecret(secret), agent.tokenMint!));
+    // Fees land as SOL in the agent's OWN wallet. Convert everything above the gas reserve to USDC and
+    // book it as the agent's revenue, so its treasury reflects the fees its token earned.
     const solAfter = await deps.chain.getSolBalance(agent.walletPubkey);
-    const gained = solAfter - solBefore;                       // fees received minus the gas this claim cost
-    const swappable = Math.min(gained, Math.max(0, solAfter - CLAIM_GAS_KEEP_LAMPORTS));
+    const swappable = Math.max(0, solAfter - CLAIM_GAS_KEEP_LAMPORTS);
     if (swappable < MIN_CLAIM_LAMPORTS) return { ok: true, bookedMicro: 0 };
     const { outAmount } = await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, (secret) =>
       deps.chain.swap(secret, SOL_MINT, deps.chain.usdcMint, swappable, deps.config.trading.slippageBps));
