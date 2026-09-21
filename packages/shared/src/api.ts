@@ -21,6 +21,7 @@ export interface HealthResponse {
   ok: boolean; version: string; demo: boolean;
   chain: { mode: ChainMode; cluster: string }; llm: LlmMode; sandbox: SandboxName;
   payments: { mode: ChainMode; simulateEnabled: boolean };
+  googleAuth: boolean;              // is "Sign in with Google" configured?
 }
 export type StatsResponse = GlobalStats;
 export interface SeriesQuery { days?: number }              // default 30

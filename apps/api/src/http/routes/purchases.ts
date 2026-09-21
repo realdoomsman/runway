@@ -8,7 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
-  ALL_TOOLS, DIRECTIVE_MAX_CHARS, isClaimOwnerId,
+  ALL_TOOLS, DIRECTIVE_MAX_CHARS, isWalletlessOwnerId,
   type CreatePurchaseResponse, type Me, type NameAvailableResponse, type PurchasePublic,
   type QuoteResponse, type TiersResponse, type ToolName,
 } from '@runway/shared';
@@ -84,8 +84,8 @@ export async function purchaseRoutes(app: FastifyInstance, deps: Deps, auth: Aut
       let ownerWallet: string | undefined;
       if (body.path === 'wallet') {
         ownerWallet = ownerIdOf(request);
-        if (isClaimOwnerId(ownerWallet)) {
-          throw badRequest('A claim-code identity has no wallet to pay from. Use the deposit address instead.');
+        if (isWalletlessOwnerId(ownerWallet)) {
+          throw badRequest('A claim-code or Google identity has no wallet to pay from. Use the deposit address instead.');
         }
       }
       const created = await payments().createPurchase({ ...body, ownerWallet });

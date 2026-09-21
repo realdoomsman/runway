@@ -16,7 +16,7 @@ import { useWalletStore } from '../store/wallet';
 export function WalletButton() {
   const demo = useAppStore((s) => (s.stats ? s.stats.demo : null));
   const me = useAppStore((s) => s.me);
-  if (me && me.ownerKind === 'claim') return <ClaimSessionButton />;
+  if (me && (me.ownerKind === 'claim' || me.ownerKind === 'google')) return <ClaimSessionButton />;
   if (demo === null) return <button type="button" className="wallet-btn" disabled>…</button>;
   return demo ? <DemoWalletButton /> : <AdapterWalletButton />;
 }
@@ -103,6 +103,7 @@ function DemoWalletButton() {
 
 function AdapterWalletButton() {
   const me = useAppStore((s) => s.me);
+  const googleAuth = useAppStore((s) => s.googleAuth);
   const { wallets, wallet, select, connect, disconnect, connected, connecting, publicKey, signMessage } = useWallet();
   const { status, error, signIn, signOut, clearError } = useWalletStore();
   const { open, setOpen, ref } = useMenu();
@@ -203,6 +204,11 @@ function AdapterWalletButton() {
               </button>
             );
           })}
+          {googleAuth && (
+            <button type="button" className="wm-google" onClick={() => { window.location.href = '/api/auth/google/start'; }}>
+              <span>SIGN IN WITH GOOGLE</span>
+            </button>
+          )}
           <Link className="wm-link" to="/claim" onClick={() => setOpen(false)}>I HAVE A CLAIM CODE</Link>
           {(error ?? connectError) && <div className="wm-note wm-err">{error ?? connectError}</div>}
         </div>

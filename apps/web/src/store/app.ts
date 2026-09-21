@@ -18,6 +18,8 @@ interface AppState {
   version: string | null;
   /** `payments` block of /api/health (SPEC-V2 §5.9); null until health answers. */
   payments: PaymentsHealth | null;
+  /** Is "Sign in with Google" configured on the server? */
+  googleAuth: boolean;
   wsState: WsState;
   /** Epoch ms of the last WebSocket message; drives "synced {n}s ago". */
   lastSyncAt: number | null;
@@ -38,6 +40,7 @@ export const useAppStore = create<AppState>()((set) => ({
   meLoaded: false,
   version: null,
   payments: null,
+  googleAuth: false,
   wsState: 'closed',
   lastSyncAt: null,
 
@@ -49,7 +52,7 @@ export const useAppStore = create<AppState>()((set) => ({
     if (me && me.agents.length > 0) useAgentsStore.getState().upsert(me.agents);
     set({ me, meLoaded: true });
   },
-  setHealth: (health) => set({ version: health.version, payments: paymentsHealthOf(health) }),
+  setHealth: (health) => set({ version: health.version, payments: paymentsHealthOf(health), googleAuth: health.googleAuth }),
   setWsState: (wsState) => set({ wsState }),
   touchSync: () => set({ lastSyncAt: Date.now() }),
 }));

@@ -7,15 +7,24 @@
 // owns only the alphabet, the printed format and the normalizer so the web can validate a code
 // before posting it.
 
-export type OwnerKind = 'wallet' | 'claim';
+export type OwnerKind = 'wallet' | 'claim' | 'google';
 export const CLAIM_OWNER_PREFIX = 'claim_';
+// Google-authenticated owner: `google_<sub>` where sub is the stable Google account id. Like a claim
+// identity it has no wallet of its own, so a payout wallet must be set before it can withdraw.
+export const GOOGLE_OWNER_PREFIX = 'google_';
 
 /** Owner id for the no-wallet path. `purchaseId` is a `pu_…` id. */
 export const claimOwnerId = (purchaseId: string): string => `${CLAIM_OWNER_PREFIX}${purchaseId}`;
 export const isClaimOwnerId = (id: string): boolean => id.startsWith(CLAIM_OWNER_PREFIX);
-export const ownerKindOf = (id: string): OwnerKind => (isClaimOwnerId(id) ? 'claim' : 'wallet');
-/** The wallet an owner id represents, or null for a claim identity. */
-export const walletOfOwnerId = (id: string): string | null => (isClaimOwnerId(id) ? null : id);
+/** Owner id for the Google-login path. `sub` is the Google account's stable subject id. */
+export const googleOwnerId = (sub: string): string => `${GOOGLE_OWNER_PREFIX}${sub}`;
+export const isGoogleOwnerId = (id: string): boolean => id.startsWith(GOOGLE_OWNER_PREFIX);
+/** True for any identity that has no Solana wallet of its own (claim code or Google login). */
+export const isWalletlessOwnerId = (id: string): boolean => isClaimOwnerId(id) || isGoogleOwnerId(id);
+export const ownerKindOf = (id: string): OwnerKind =>
+  isClaimOwnerId(id) ? 'claim' : isGoogleOwnerId(id) ? 'google' : 'wallet';
+/** The wallet an owner id represents, or null for a walletless (claim / Google) identity. */
+export const walletOfOwnerId = (id: string): string | null => (isWalletlessOwnerId(id) ? null : id);
 /** The purchase id a claim owner id was minted from, or null. */
 export const purchaseOfClaimOwnerId = (id: string): string | null =>
   (isClaimOwnerId(id) ? id.slice(CLAIM_OWNER_PREFIX.length) : null);

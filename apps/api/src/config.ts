@@ -79,6 +79,9 @@ const envSchema = z.object({
   SEARCH_PROVIDER: z.enum(['brave', 'tavily', 'none']).default('none'),
   BRAVE_API_KEY: optional(z.string()),
   TAVILY_API_KEY: optional(z.string()),
+  // Sign in with Google (OAuth 2.0). Both required to enable the button; absent = feature off.
+  GOOGLE_CLIENT_ID: optional(z.string()),
+  GOOGLE_CLIENT_SECRET: optional(z.string()),
   SANDBOX_DRIVER: z.enum(['docker', 'local']).default('local'),
   SANDBOX_IMAGE: z.string().default('runway-sandbox:latest'),
   SANDBOX_NETWORK: z.string().min(1).max(60).default(AGENT_NETWORK_DEFAULT),
@@ -135,6 +138,7 @@ export interface Config {
     x402: { gatewayUrl: string; maxPriceMicro: number } | null;
   };
   search: { provider: Env['SEARCH_PROVIDER']; braveApiKey: string | null; tavilyApiKey: string | null };
+  auth: { google: { clientId: string; clientSecret: string } | null };
   sandbox: { driver: Env['SANDBOX_DRIVER']; image: string; network: string; egressFiltered: boolean };
   dataDir: string;                  // absolute
   sitesBaseUrl: string;
@@ -260,6 +264,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
         : null,
     },
     search: { provider: e.SEARCH_PROVIDER, braveApiKey: e.BRAVE_API_KEY ?? null, tavilyApiKey: e.TAVILY_API_KEY ?? null },
+    auth: {
+      google: e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET
+        ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
+        : null,
+    },
     sandbox: {
       driver: e.SANDBOX_DRIVER, image: e.SANDBOX_IMAGE, network: e.SANDBOX_NETWORK,
       egressFiltered: e.SANDBOX_EGRESS_FILTERED,

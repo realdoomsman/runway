@@ -14,6 +14,7 @@ import { createDbAuthStore } from './auth-store.js';
 import { registerErrorHandling } from './errors.js';
 import { agentRoutes } from './routes/agents.js';
 import { authRoutes } from './routes/auth.js';
+import { googleAuthRoutes } from './routes/googleAuth.js';
 import { marketRoutes } from './routes/market.js';
 import { meRoutes } from './routes/me.js';
 import { purchaseRoutes } from './routes/purchases.js';
@@ -67,6 +68,7 @@ export async function createApp(deps: Deps, opts: AppOptions = {}): Promise<Fast
 
   await registerWs(app, deps, stats);
   await authRoutes(app, deps, auth);
+  await googleAuthRoutes(app, deps, auth);
   await meRoutes(app, deps, auth);
   await purchaseRoutes(app, deps, auth);
   await agentRoutes(app, deps, auth);

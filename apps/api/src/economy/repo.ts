@@ -1,6 +1,6 @@
 // Small row accessors shared across economy/ and runtime/.
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { isClaimOwnerId, type OwnerKind } from '@runway/shared';
+import { isWalletlessOwnerId, type OwnerKind } from '@runway/shared';
 import type { DbLike } from '../db/client.js';
 import { agents, users, type AgentRow, type UserRow } from '../db/schema.js';
 import { forbidden, notFound } from '../lib/errors.js';
@@ -62,7 +62,7 @@ export async function loadUser(db: DbLike, ownerId: string): Promise<UserRow | n
 export async function payoutWalletOf(db: DbLike, ownerId: string): Promise<string | null> {
   const user = await loadUser(db, ownerId);
   if (user?.payoutWallet) return user.payoutWallet;
-  return isClaimOwnerId(ownerId) ? null : ownerId;
+  return isWalletlessOwnerId(ownerId) ? null : ownerId;
 }
 
 export const isLive = (a: Pick<AgentRow, 'status'>): boolean => a.status === 'alive' || a.status === 'sleeping' || a.status === 'paused';
