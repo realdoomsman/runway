@@ -2,7 +2,7 @@
 // three live agents, and the honest part, which is never behind a toggle.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { AgentPublic, ModelInfo, PurchaseQuote, SeriesPoint } from '@runway/shared';
+import type { AgentDetail, AgentPublic, ModelInfo, PurchaseQuote, SeriesPoint } from '@runway/shared';
 import {
   FOUNDER_FEE_BPS_DEFAULT, MIN_PURCHASE_MICRO, PROTOCOL_DISCLAIMER, PURCHASE_DISCLAIMER,
   fmtUsd, quoteFor, resolveTierModel, tierForMicro, usd,
@@ -14,8 +14,9 @@ import { Feed } from '../components/Feed';
 import { Panel } from '../components/Panel';
 import { RunwayStrip } from '../components/RunwayStrip';
 import { StatTile } from '../components/StatTile';
+import { SurvivalScore } from '../components/profile/SurvivalScore';
 import { QuoteLedger } from '../components/buy/QuoteLedger';
-import { fmtCompact } from '../lib/format';
+import { fmtAgeDays, fmtCompact } from '../lib/format';
 import { chainBadge } from '../lib/mode';
 import { useAgentList, useAgentsStore } from '../store/agents';
 import { useAppStore } from '../store/app';
@@ -107,6 +108,8 @@ export default function Landing() {
           <Link to="/claim">I have a claim code →</Link>
         </div>
       </section>
+
+      <FlagshipHero />
 
       <ProofStrip series={series} />
 
@@ -234,5 +237,58 @@ function LiveCard({ agent }: { agent: AgentPublic }) {
       </div>
       <div className="lc-sum">{agent.summary || agent.directive}</div>
     </Link>
+  );
+}
+
+/** MEET SCALE — the flagship Main Agent, driven by health.mainAgentId. Renders nothing until that
+ * id is known and its detail has loaded; a failed fetch degrades to nothing rather than crashing. */
+function FlagshipHero() {
+  const mainAgentId = useAppStore((s) => s.mainAgentId);
+  const [agent, setAgent] = useState<AgentDetail | null>(null);
+
+  useEffect(() => {
+    if (!mainAgentId) {
+      setAgent(null);
+      return;
+    }
+    let live = true;
+    void api.agent(mainAgentId)
+      .then((next) => { if (live) setAgent(next); })
+      .catch(() => { if (live) setAgent(null); });
+    return () => { live = false; };
+  }, [mainAgentId]);
+
+  if (!agent) return null;
+
+  const pnl = agent.tradeRealizedMicro;
+  const pnlText = `${pnl >= 0 ? '+' : '−'}${fmtUsd(Math.abs(pnl))}`;
+  const openPositions = agent.positions.length;
+
+  return (
+    <div className="section-gap">
+      <Panel title="MEET SCALE — THE MAIN AGENT" right="FLAGSHIP">
+        <div className="flagship">
+          <div className="fs-lead">
+            <div className="fs-head">
+              <span className="fs-name">{agent.name}</span>
+              <Badge kind={agent.phase} />
+              <span className="chip">{agent.status}</span>
+            </div>
+            <SurvivalScore score={agent.survivalScore} grade={agent.survivalGrade} size="lg" />
+            <div className="fs-strip">
+              <RunwayStrip runwayDays={agent.runwayDays} status={agent.status} ageDays={agent.ageDays} size="lg" />
+            </div>
+            <div className="fs-lede">An autonomous agent trading to stay alive on mainnet.</div>
+            <Link className="btn-primary" to={`/a/${agent.id}`}>VIEW SCALE'S PROFILE →</Link>
+          </div>
+          <div className="fs-stats grid cols-2">
+            <StatTile label="TREASURY" value={fmtUsd(agent.treasuryMicro)} />
+            <StatTile label="REALIZED P&L" value={<span className={pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : undefined}>{pnlText}</span>} />
+            <StatTile label="OPEN POSITIONS" value={openPositions} delta={agent.phase} />
+            <StatTile label="AGE" value={fmtAgeDays(agent.ageDays)} delta={`${agent.status.toUpperCase()} · ${agent.phase.toUpperCase()}`} />
+          </div>
+        </div>
+      </Panel>
+    </div>
   );
 }

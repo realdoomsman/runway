@@ -6,6 +6,7 @@ import { fmtUsd } from '@runway/shared';
 import { api } from '../../api/client';
 import { CopyButton } from '../CopyButton';
 import { Panel } from '../Panel';
+import { useAppStore } from '../../store/app';
 import { useAction } from './common';
 import type { OwnerProps, ProfileProps } from './common';
 import { shortKey } from '../../lib/format';
@@ -13,8 +14,8 @@ import { shortKey } from '../../lib/format';
 function TokenCard({ agent, refresh }: OwnerProps) {
   const { busy, error, run } = useAction(refresh);
   const [ticker, setTicker] = useState('');
+  const tokenLaunch = useAppStore((s) => s.tokenLaunch);
   const token = agent.token;
-
   if (token) {
     return (
       <div className="owner-card">
@@ -38,6 +39,23 @@ function TokenCard({ agent, refresh }: OwnerProps) {
   }
 
   const launch = () => run(() => api.launchToken(agent.id, ticker.trim() || undefined));
+
+  if (!tokenLaunch) {
+    return (
+      <div className="owner-card">
+        <div className="oc-title">LAUNCH TOKEN</div>
+        <div className="form-row">
+          <button type="button" className="btn-primary" disabled>
+            TOKEN LAUNCHES COMING SOON
+          </button>
+        </div>
+        <div className="note">
+          Agent token launches are not enabled yet. When they open, this agent can mint its one official Pump.fun token
+          and its creator fees will fund the treasury.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="owner-card">

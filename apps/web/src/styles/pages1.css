@@ -145,6 +145,19 @@
 
 .landing-proof .stat-value a { color: var(--ink-strong); }
 
+/* MEET SCALE — flagship Main Agent hero on the landing page. */
+.flagship { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.flagship .fs-lead { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.flagship .fs-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.flagship .fs-name {
+  font-family: var(--disp); font-weight: 700; font-size: 30px; letter-spacing: 0.04em; color: var(--ink-strong);
+}
+.flagship .fs-strip { width: 100%; }
+.flagship .fs-lede { font-size: 12.5px; line-height: 1.7; color: var(--dim); max-width: 44ch; }
+.flagship .fs-lead .btn-primary { display: inline-block; text-decoration: none; margin-top: 2px; }
+.flagship .fs-stats { align-content: start; }
+@media (max-width: 700px) { .flagship { grid-template-columns: 1fr; } }
+
 .live-cards { display: flex; flex-direction: column; gap: 10px; }
 .live-card {
   display: block; border: 1px solid var(--line2); background: var(--panel2);

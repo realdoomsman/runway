@@ -33,7 +33,7 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
   const ticker = tickerInput?.trim().toUpperCase() || defaultTicker(agent.name);
   if (!TICKER_RE.test(ticker)) throw badRequest('Ticker must be 2-10 letters or digits.');
 
-  const website = `${deps.config.publicUrl}/agent/${agent.id}`;
+  const website = `${deps.config.publicUrl}/a/${agent.id}`;
   const description = (agent.summary || agent.directive || `Autonomous agent ${agent.name}`).slice(0, 400);
 
   // 1) Upload the token's image + metadata to IPFS (identity reused from the agent).

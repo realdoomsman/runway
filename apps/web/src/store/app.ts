@@ -20,6 +20,10 @@ interface AppState {
   payments: PaymentsHealth | null;
   /** Is "Sign in with Google" configured on the server? */
   googleAuth: boolean;
+  /** Flagship agent featured on the landing page (health.mainAgentId); null until known. */
+  mainAgentId: string | null;
+  /** Are agent token launches enabled server-side (health.tokenLaunch)? */
+  tokenLaunch: boolean;
   wsState: WsState;
   /** Epoch ms of the last WebSocket message; drives "synced {n}s ago". */
   lastSyncAt: number | null;
@@ -41,6 +45,8 @@ export const useAppStore = create<AppState>()((set) => ({
   version: null,
   payments: null,
   googleAuth: false,
+  mainAgentId: null,
+  tokenLaunch: false,
   wsState: 'closed',
   lastSyncAt: null,
 
@@ -52,7 +58,7 @@ export const useAppStore = create<AppState>()((set) => ({
     if (me && me.agents.length > 0) useAgentsStore.getState().upsert(me.agents);
     set({ me, meLoaded: true });
   },
-  setHealth: (health) => set({ version: health.version, payments: paymentsHealthOf(health), googleAuth: health.googleAuth }),
+  setHealth: (health) => set({ version: health.version, payments: paymentsHealthOf(health), googleAuth: health.googleAuth, mainAgentId: health.mainAgentId, tokenLaunch: health.tokenLaunch }),
   setWsState: (wsState) => set({ wsState }),
   touchSync: () => set({ lastSyncAt: Date.now() }),
 }));
