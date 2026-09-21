@@ -27,6 +27,8 @@ const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'
 const PUMP_FEES_PROGRAM = new PublicKey('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
 const SYSTEM_PROGRAM = new PublicKey('11111111111111111111111111111111');
 const DISTRIBUTE_DISCRIMINATOR = Buffer.from('ffcb134ff444089f', 'hex');   // distribute_creator_fees_v2
+const PUMP_AMM_PROGRAM = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+const TRANSFER_DISCRIMINATOR = Buffer.from('01214eb921432c5c', 'hex');     // transfer_creator_fees_to_pump_v2
 
 export const pumpUrl = (mint: string): string => `https://pump.fun/${mint}`;
 const defaultTicker = (name: string): string => (name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) || 'AGENT');
@@ -109,41 +111,47 @@ function readShareholders(data: Buffer): PublicKey[] {
   return out;
 }
 
-// distribute_creator_fees_v2 for a SOL-paired coin, or null when the coin has no sharing_config.
-async function distributeCreatorFeesIx(conn: Connection, mint: PublicKey, payer: PublicKey): Promise<TransactionInstruction | null> {
+const wsolAta = (owner: PublicKey): PublicKey =>
+  getAssociatedTokenAddressSync(NATIVE_MINT, owner, true, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+
+// The claim for a fee-sharing, SOL-paired coin, or null when the coin has no sharing_config. Once a
+// coin graduates its creator fees accrue on the PumpSwap AMM, so transfer_creator_fees_to_pump_v2
+// first sweeps those into the bonding curve's creator vault (skipped while the AMM vault does not
+// exist yet), then distribute_creator_fees_v2 pays the vault out to every shareholder. Both are
+// permissionless; the agent just pays gas. Account layouts verified byte-for-byte against the SDK.
+async function feeSharingClaimIxs(conn: Connection, mint: PublicKey, payer: PublicKey): Promise<TransactionInstruction[] | null> {
   const sharingConfig = pumpPda([Buffer.from('sharing-config'), mint.toBuffer()], PUMP_FEES_PROGRAM);
   const info = await conn.getAccountInfo(sharingConfig, 'confirmed');
   if (!info) return null;
   const shareholders = readShareholders(info.data);
-  const bondingCurve = pumpPda([Buffer.from('bonding-curve'), mint.toBuffer()]);
   const creatorVault = pumpPda([Buffer.from('creator-vault'), sharingConfig.toBuffer()]);
-  const eventAuthority = pumpPda([Buffer.from('__event_authority')]);
-  const creatorVaultAta = getAssociatedTokenAddressSync(NATIVE_MINT, creatorVault, true, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
-  const keys = [
-    { pubkey: payer, isSigner: true, isWritable: true },
-    { pubkey: mint, isSigner: false, isWritable: false },
-    { pubkey: bondingCurve, isSigner: false, isWritable: false },
-    { pubkey: sharingConfig, isSigner: false, isWritable: false },
-    { pubkey: creatorVault, isSigner: false, isWritable: true },
-    { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
-    { pubkey: eventAuthority, isSigner: false, isWritable: false },
-    { pubkey: PUMP_PROGRAM, isSigner: false, isWritable: false },
-    { pubkey: creatorVaultAta, isSigner: false, isWritable: true },
-    { pubkey: NATIVE_MINT, isSigner: false, isWritable: false },
-    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-    ...shareholders.map((s) => ({ pubkey: s, isSigner: false, isWritable: true })),
-  ];
-  return new TransactionInstruction({ programId: PUMP_PROGRAM, keys, data: Buffer.concat([DISTRIBUTE_DISCRIMINATOR, Buffer.from([1])]) });
+  const k = (pubkey: PublicKey, isWritable: boolean, isSigner = false) => ({ pubkey, isSigner, isWritable });
+  const ixs: TransactionInstruction[] = [];
+
+  const ammVaultAuthority = pumpPda([Buffer.from('creator_vault'), sharingConfig.toBuffer()], PUMP_AMM_PROGRAM);
+  if (await conn.getAccountInfo(wsolAta(ammVaultAuthority), 'confirmed')) {
+    ixs.push(new TransactionInstruction({ programId: PUMP_AMM_PROGRAM, data: TRANSFER_DISCRIMINATOR, keys: [
+      k(payer, true, true), k(NATIVE_MINT, false), k(TOKEN_PROGRAM_ID, false), k(SYSTEM_PROGRAM, false), k(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+      k(sharingConfig, false), k(ammVaultAuthority, true), k(wsolAta(ammVaultAuthority), true), k(creatorVault, true), k(wsolAta(creatorVault), true),
+      k(pumpPda([Buffer.from('__event_authority')], PUMP_AMM_PROGRAM), false), k(PUMP_AMM_PROGRAM, false),
+    ] }));
+  }
+  ixs.push(new TransactionInstruction({ programId: PUMP_PROGRAM, data: Buffer.concat([DISTRIBUTE_DISCRIMINATOR, Buffer.from([1])]), keys: [
+    k(payer, true, true), k(mint, false), k(pumpPda([Buffer.from('bonding-curve'), mint.toBuffer()]), false), k(sharingConfig, false),
+    k(creatorVault, true), k(SYSTEM_PROGRAM, false), k(pumpPda([Buffer.from('__event_authority')]), false), k(PUMP_PROGRAM, false),
+    k(wsolAta(creatorVault), true), k(NATIVE_MINT, false), k(TOKEN_PROGRAM_ID, false), k(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+    ...shareholders.map((s) => k(s, true)),
+  ] }));
+  return ixs;
 }
 
 // Pull the agent's pending Pump.fun creator fees into its OWN wallet, signed by the agent. Fee-sharing
-// coins use distribute_creator_fees_v2; legacy single-recipient coins fall back to collect_creator_fee.
+// coins use transfer + distribute (above); legacy single-recipient coins fall back to collect_creator_fee.
 async function claimPumpFees(conn: Connection, agentKp: Keypair, mintStr: string): Promise<void> {
-  const ix = await distributeCreatorFeesIx(conn, new PublicKey(mintStr), agentKp.publicKey);
-  if (ix) {
+  const ixs = await feeSharingClaimIxs(conn, new PublicKey(mintStr), agentKp.publicKey);
+  if (ixs) {
     const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
-    const msg = new TransactionMessage({ payerKey: agentKp.publicKey, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message();
+    const msg = new TransactionMessage({ payerKey: agentKp.publicKey, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message();
     const tx = new VersionedTransaction(msg);
     tx.sign([agentKp]);
     const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
