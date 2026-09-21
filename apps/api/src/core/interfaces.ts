@@ -3,7 +3,8 @@
 // NOTE: this file must never import from `payments/` — the `Payments` contract is DECLARED here and
 // implemented there, so the contract file has no dependency on the implementation.
 import type {
-  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, DecisionKind, Effort, EventKind, FeedEvent,
+  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, CustodialWallet, CustodialWithdrawResponse,
+  DecisionKind, Effort, EventKind, FeedEvent,
   GlobalStats, GraveyardEntry, GraveyardSort, LeaderboardBy, LedgerEntry, LedgerKind, ListAgentsQuery, Me, Micro,
   ModelInfo, NameAvailableResponse, OwnerKind, Pace, PurchasePath, PurchasePublic, PurchaseQuote, SeriesPoint, Service,
   StepPublic, StepTranscript, StopReason, TierId, TiersResponse, ToolName, TreasuryPublic, TreasuryTx, WsMsg, WsMsgOf,
@@ -218,6 +219,10 @@ export interface Services {
   treasuryTxs(q: { limit: number; before?: number }): Promise<TreasuryTx[]>;
   me(ownerId: string): Promise<Me>;
   setPayoutWallet(ownerId: string, wallet: string): Promise<Me>;
+  /** A Google owner's server-held wallet: its deposit address + live balances (custodial.ts). */
+  custodialWallet(ownerId: string): Promise<CustodialWallet>;
+  /** Sends USDC out of a Google owner's custodial wallet; the treasury sponsors gas. */
+  withdrawCustodial(ownerId: string, to: string, amountMicro: Micro): Promise<CustodialWithdrawResponse>;
 }
 
 // ---- Runtime / HTTP --------------------------------------------------------

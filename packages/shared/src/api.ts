@@ -1,8 +1,9 @@
 // HTTP request/response shapes for every route in SPEC-V2 §8 (was SPEC §8.15 + AMENDMENTS C25).
 // Query types describe parsed query strings (numbers already coerced).
 import type {
-  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, ChainMode, FeedEvent, GlobalStats, GraveyardEntry,
-  LedgerEntry, LlmMode, Me, Micro, ModelInfo, PurchasePath, PurchasePublic, SandboxName, SeriesPoint, Service,
+  AgentDetail, AgentLiveState, AgentPublic, Bounty, BountyStatus, ChainMode, CustodialWallet, FeedEvent, GlobalStats,
+  GraveyardEntry, LedgerEntry, LlmMode, Me, Micro, ModelInfo, PurchasePath, PurchasePublic, SandboxName, SeriesPoint,
+  Service,
   StepPublic, StepTranscript, ToolName, TreasuryPublic, TreasuryTx,
 } from './types.js';
 import type { AgentTier, Pace, PurchaseQuote, TierId } from './tiers.js';
@@ -122,6 +123,11 @@ export interface DemoAuthRequest { wallet: string }                             
 export type MeResponse = Me;
 export interface SetPayoutWalletRequest { wallet: string }
 export type SetPayoutWalletResponse = Me;
+
+// ---- custodial wallet (Google owners): GET /api/me/wallet, POST /api/me/withdraw ------------------
+export type CustodialWalletResponse = CustodialWallet;
+export interface CustodialWithdrawRequest { to: string; amountMicro: Micro }
+export interface CustodialWithdrawResponse { sentMicro: Micro; txSig: string }
 
 // ---- public service endpoint (POST /svc/:serviceId) ------------------------
 export const SERVICE_PAYMENT_HEADER = 'x-payment-tx';

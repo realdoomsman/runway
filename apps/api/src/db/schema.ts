@@ -30,6 +30,7 @@ export const users = pgTable('users', {
   kind: text('kind').$type<OwnerKind>().notNull().default('wallet'),
   payoutWallet: text('payout_wallet'),           // a Solana address a claim owner can withdraw to
   purchaseId: text('purchase_id'),               // for kind='claim', the purchase that minted it
+  custodialPubkey: text('custodial_pubkey'),     // for kind='google', a server-held Solana wallet (key in user_keys)
 });
 
 export const sessions = pgTable('sessions', {
@@ -182,6 +183,17 @@ export const purchases = pgTable('purchases', {
 
 export const agentKeys = pgTable('agent_keys', {
   agentId: text('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+  pubkey: text('pubkey').notNull(),
+  secretEnc: bytea('secret_enc').notNull(),
+  iv: bytea('iv').notNull(),
+  tag: bytea('tag').notNull(),
+  createdAt: tsNow('created_at'),
+});
+
+// The custodial keypair for a Google owner (mirror of agent_keys, keyed by owner id). The only place a
+// custodial secret is persisted (encrypted) and read back; the row is deleted with the user (cascade).
+export const userKeys = pgTable('user_keys', {
+  ownerId: text('owner_id').primaryKey().references(() => users.wallet, { onDelete: 'cascade' }),
   pubkey: text('pubkey').notNull(),
   secretEnc: bytea('secret_enc').notNull(),
   iv: bytea('iv').notNull(),
@@ -405,6 +417,7 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type AgentRow = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentKeyRow = typeof agentKeys.$inferSelect;
+export type UserKeyRow = typeof userKeys.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;
 export type NewLedger = typeof ledger.$inferInsert;
 export type StepRow = typeof steps.$inferSelect;

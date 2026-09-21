@@ -2,15 +2,16 @@
 // identity) the payout wallet it will need before it can ever withdraw.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { AgentPublic, Me, PurchasePublic } from '@runway/shared';
+import type { AgentPublic, CustodialWallet, Me, PurchasePublic } from '@runway/shared';
 import { fmtUsd } from '@runway/shared';
 import { api, isApiError } from '../api/client';
 import { AgentBadges } from '../components/Badge';
+import { CopyButton } from '../components/CopyButton';
 import { ExpiryCountdown } from '../components/Countdown';
 import { EmptyState } from '../components/EmptyState';
 import { Panel } from '../components/Panel';
 import { RunwayStrip } from '../components/RunwayStrip';
-import { fmtAgo, fmtDateTime, shortKey } from '../lib/format';
+import { explorerAddressUrl, fmtAgo, fmtDateTime, shortKey } from '../lib/format';
 import { useAgentsStore } from '../store/agents';
 import { useAppStore } from '../store/app';
 import { useWalletStore } from '../store/wallet';
@@ -57,10 +58,18 @@ export default function MyAgents() {
         <p className="page-sub">
           {me.ownerKind === 'claim'
             ? 'Signed in with a claim code. This identity owns its agents exactly as a wallet would.'
+            : me.ownerKind === 'google'
+            ? 'Signed in with Google. Your funds live in the custodial wallet below — deposit USDC, buy agents, withdraw any time.'
             : `Signed in as ${shortKey(me.wallet ?? me.ownerId, 6, 6)}.`}{' '}
           You can own as many agents as you pay for.
         </p>
       </div>
+
+      {me.custodialWallet && (
+        <div className="section-gap">
+          <CustodialWalletCard />
+        </div>
+      )}
 
       <Panel
         title="AGENTS"
@@ -215,5 +224,122 @@ function PayoutWalletCard() {
       </div>
       {error && <div className="alert err">{error}</div>}
     </Panel>
+  );
+}
+
+/** A Google owner's server-held wallet: deposit address, live balances, and withdraw-to-anywhere. */
+function CustodialWalletCard() {
+  const chainInfo = useAppStore((s) => s.chainInfo);
+  const [wallet, setWallet] = useState<CustodialWallet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setError(null);
+    try {
+      setWallet(await api.wallet());
+    } catch (e) {
+      setError(isApiError(e) ? e.message : 'Could not load your wallet.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const explorer = wallet && chainInfo ? explorerAddressUrl(wallet.pubkey, chainInfo) : null;
+
+  return (
+    <Panel
+      title="MY WALLET"
+      right={<button type="button" className="btn-ghost" onClick={() => void load()}>REFRESH</button>}
+    >
+      {loading && !wallet ? (
+        <div className="note">Loading your wallet…</div>
+      ) : wallet ? (
+        <>
+          <div className="deposit-address">
+            <div className="da-label">YOUR SOLANA DEPOSIT ADDRESS</div>
+            <div className="da-key">{wallet.pubkey}</div>
+            <div className="da-actions">
+              <CopyButton text={wallet.pubkey} label="COPY ADDRESS" />
+              {explorer && <a className="fbtn" href={explorer} target="_blank" rel="noreferrer noopener">EXPLORER ↗</a>}
+            </div>
+            <div className="da-facts">
+              <span className="daf"><span className="k">USDC</span><b>{fmtUsd(wallet.usdcMicro)}</b></span>
+              <span className="daf"><span className="k">SOL</span><b>{(wallet.solLamports / 1e9).toFixed(4)}</b></span>
+              <span className="daf"><span className="k">TOKEN</span><b>USDC on Solana</b></span>
+            </div>
+            <div className="note">
+              Send USDC on Solana to this address from any wallet or exchange. It funds your account — use it to buy
+              agents, and withdraw any time. We cover the network fee.
+            </div>
+          </div>
+          <WithdrawForm wallet={wallet} onDone={load} />
+        </>
+      ) : (
+        <div className="alert err">{error ?? 'No wallet yet.'}</div>
+      )}
+    </Panel>
+  );
+}
+
+function WithdrawForm({ wallet, onDone }: { wallet: CustodialWallet; onDone: () => Promise<void> }) {
+  const [to, setTo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sig, setSig] = useState<string | null>(null);
+
+  const amountMicro = Math.round((parseFloat(amount) || 0) * 1_000_000);
+  const valid = to.trim().length >= 32 && amountMicro > 0 && amountMicro <= wallet.usdcMicro;
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    setSig(null);
+    try {
+      const res = await api.withdrawCustodial(to.trim(), amountMicro);
+      setSig(res.txSig);
+      setTo('');
+      setAmount('');
+      await onDone();
+    } catch (e) {
+      setError(isApiError(e) ? e.message : 'Withdrawal failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="section-gap">
+      <div className="da-label">WITHDRAW USDC</div>
+      <div className="form-row">
+        <input
+          className="finput"
+          value={amount}
+          inputMode="decimal"
+          placeholder="Amount (USD)"
+          aria-label="Withdraw amount"
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <button type="button" className="btn-ghost" onClick={() => setAmount((wallet.usdcMicro / 1_000_000).toString())}>MAX</button>
+      </div>
+      <div className="form-row section-gap">
+        <input
+          className="finput"
+          value={to}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="Destination Solana address"
+          aria-label="Destination address"
+          onChange={(e) => setTo(e.target.value)}
+        />
+        <button type="button" className="btn-ghost" disabled={busy || !valid} onClick={() => void submit()}>
+          {busy ? 'SENDING…' : 'WITHDRAW'}
+        </button>
+      </div>
+      {error && <div className="alert err">{error}</div>}
+      {sig && <div className="note">Sent. Transaction <b>{shortKey(sig, 6, 6)}</b>.</div>}
+    </div>
   );
 }

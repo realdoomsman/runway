@@ -244,6 +244,11 @@ export interface Me {
   ownerKind: OwnerKind;
   wallet: string | null;            // the Solana pubkey; null for a claim identity
   payoutWallet: string | null;      // where withdrawals go; claim owners set this before withdrawing
+  custodialWallet: string | null;   // a Google owner's server-held Solana address for deposit/withdraw; null otherwise
   agents: AgentPublic[];            // newest first; there is no per-owner limit any more
   purchases: PurchasePublic[];      // this identity's pending/received purchases
 }
+
+// The balance of a Google owner's custodial wallet. `pubkey` is the deposit address; the server holds
+// the key and sponsors gas for withdrawals, so the wallet itself never needs SOL.
+export interface CustodialWallet { pubkey: string; usdcMicro: Micro; solLamports: number }

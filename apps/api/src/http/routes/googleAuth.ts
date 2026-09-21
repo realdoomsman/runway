@@ -11,6 +11,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { googleOwnerId } from '@runway/shared';
+import { ensureCustodialWallet } from '../../economy/custodial.js';
 import type { Deps } from '../../core/interfaces.js';
 import type { Auth } from '../auth.js';
 
@@ -84,7 +85,11 @@ export async function googleAuthRoutes(app: FastifyInstance, deps: Deps, auth: A
     if (!ISSUERS.includes(claims.iss)) return fail('iss mismatch');
     if (claims.exp < Math.floor(Date.now() / 1000)) return fail('id_token expired');
 
-    await auth.signIn(reply, googleOwnerId(claims.sub));
+    const ownerId = googleOwnerId(claims.sub);
+    await auth.signIn(reply, ownerId);
+    // Provision the server-held wallet now so /mine shows a deposit address on first login. Best-effort:
+    // the wallet endpoints also create it lazily, so a transient failure here never blocks sign-in.
+    try { await ensureCustodialWallet(deps, ownerId); } catch (e) { log.warn({ err: e }, 'custodial wallet provisioning deferred'); }
     return reply.redirect(`${deps.config.publicUrl}/mine`);
   });
 }

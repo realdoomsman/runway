@@ -112,6 +112,8 @@ export function createFakeServices(): FakeServices {
       });
     },
     async setPayoutWallet(ownerId, wallet) { return makeMe(ownerId, { payoutWallet: wallet || PAYOUT_WALLET }); },
+    async custodialWallet() { return { pubkey: 'CustodiaLWa11etPubkey1111111111111111111111', usdcMicro: 5_000_000, solLamports: 0 }; },
+    async withdrawCustodial(_ownerId, _to, amountMicro) { return { sentMicro: amountMicro ?? 1_000_000, txSig: 'sig-custodial-withdraw' }; },
   };
 
   for (const method of Object.keys(impl) as (keyof Services)[]) {

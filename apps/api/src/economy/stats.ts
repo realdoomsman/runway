@@ -359,6 +359,7 @@ export async function me(deps: Deps, ownerId: string): Promise<Me> {
     ownerKind,
     wallet: ownerKind === 'claim' ? null : walletOfOwnerId(ownerId),
     payoutWallet: user?.payoutWallet ?? null,
+    custodialWallet: user?.custodialPubkey ?? null,
     agents: await toPublicMany(deps, rows),
     purchases: purchaseList,
   };

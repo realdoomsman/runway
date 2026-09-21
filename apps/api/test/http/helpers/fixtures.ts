@@ -103,6 +103,7 @@ export function makeMe(ownerId: string, overrides: Partial<Me> = {}): Me {
     ownerKind: isClaim ? 'claim' : 'wallet',
     wallet: isClaim ? null : ownerId,
     payoutWallet: null,
+    custodialWallet: null,
     agents: [],
     purchases: [],
     ...overrides,

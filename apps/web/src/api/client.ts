@@ -10,6 +10,8 @@ import type {
   Bounty,
   BountiesQuery,
   CallServiceRequest,
+  CustodialWallet,
+  CustodialWithdrawResponse,
   CallServiceResponse,
   CreatePurchaseRequest,
   CreatePurchaseResponse,
@@ -180,6 +182,8 @@ export const api = {
   authDemo: (wallet: string) => post<Me>('/api/auth/demo', { wallet }),
   me: () => get<Me>('/api/me'),
   setPayoutWallet: (wallet: string) => post<Me>('/api/me/payout-wallet', { wallet }),
+  wallet: () => get<CustodialWallet>('/api/me/wallet'),
+  withdrawCustodial: (to: string, amountMicro: Micro) => post<CustodialWithdrawResponse>('/api/me/withdraw', { to, amountMicro }),
 };
 
 function enc(s: string): string {

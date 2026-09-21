@@ -2,6 +2,7 @@
 // which is the only writer of the agent money columns (SPEC §7, §8.4, §8.11; AMENDMENTS §C;
 // SPEC-V2 §6.2, §7). Every `ownerId` is an owner id: a base58 pubkey, or `claim_pu_…`.
 import type { Deps, Services } from '../core/interfaces.js';
+import { custodialWallet, withdrawCustodial } from './custodial.js';
 import { loadDetail } from './agents.js';
 import { listEvents } from './events.js';
 import { listLedger } from './ledger.js';
@@ -52,6 +53,8 @@ export function createServices(deps: Deps): Services {
     treasuryTxs: (q) => treasury.listTxs(q),
     me: (ownerId) => me(deps, ownerId),
     setPayoutWallet: (ownerId, wallet) => setPayoutWallet(deps, ownerId, wallet),
+    custodialWallet: (ownerId) => custodialWallet(deps, ownerId),
+    withdrawCustodial: (ownerId, to, amountMicro) => withdrawCustodial(deps, ownerId, to, amountMicro),
   };
 }
 
