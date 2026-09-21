@@ -55,6 +55,9 @@ export function createX402Provider(opts: X402ProviderOpts): LlmProvider {
       const signer = await opts.resolveSigner(req.agentId);
       const client = new x402Client()
         .register(SOLANA_ANY, new ExactSvmScheme(signer))
+        // Gateways that also accept EVM list it first; we only pay from a Solana wallet, so keep only
+        // the Solana requirements or the default selector would pick an EVM option we can't settle.
+        .registerPolicy((_v, reqs) => reqs.filter((r) => String(r.network).startsWith('solana:')))
         .setSpendControls({ maxAmountPerPayment });
 
       const paidFetch = wrapFetchWithPayment(baseFetch, client);
