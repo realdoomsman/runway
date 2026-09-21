@@ -40,6 +40,8 @@ export function makeAgent(overrides: Partial<AgentPublic> = {}): AgentPublic {
     burnPerDayMicro: 130_800, burnBasis: 'projected', runwayDays: 68.8, ageDays: 0.5, summary: 'Building.',
     forkedFrom: null, forkCount: 0, generation: 1, shareStrategy: false, hasStrategy: false, revivals: 0,
     simulated: true, spawnError: null, paidBack: false,
+    tradeRealizedMicro: 0, tradeVolumeMicro: 0, creatorRewardMicro: 0, survivalScore: 55, survivalGrade: 'stable',
+    tokenMint: null, tokenTicker: null, tokenName: null, tokenLaunchedAt: null,
     ...overrides,
   };
 }

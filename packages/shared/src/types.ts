@@ -117,7 +117,20 @@ export interface AgentPublic {
   simulated: boolean;         // driven by the mock provider
   spawnError: string | null;
   paidBack: boolean;          // revenueExternalMicro ≥ fundingMicro
+  // Trading + Survival Score (SPEC "agents compete against financial extinction").
+  tradeRealizedMicro: Micro;  // cumulative realized trade P&L (signed)
+  tradeVolumeMicro: Micro;
+  creatorRewardMicro: Micro;  // Pump.fun creator fees routed in
+  survivalScore: number;      // 0..100 composite health
+  survivalGrade: SurvivalGrade;
+  // The agent's one official token, once launched (one agent = one token).
+  tokenMint: string | null;
+  tokenTicker: string | null;
+  tokenName: string | null;
+  tokenLaunchedAt: string | null;
 }
+
+export type SurvivalGrade = 'thriving' | 'healthy' | 'stable' | 'at_risk' | 'critical';
 
 // Graveyard rows (AMENDMENTS D37): the card renders the first sentence of the post-mortem, which is
 // too heavy for AgentPublic (list rows, leaderboards and every WS `agent` patch use that shape).

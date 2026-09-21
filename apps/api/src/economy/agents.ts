@@ -118,12 +118,27 @@ function burnOf(deps: Deps, a: AgentRow, x: Pick<Extras, 'activeDeployments' | '
   }, burnRates(deps));
 }
 
+// Survival Score (0..100): a live read on how close an agent is to financial extinction. Runway is the
+// dominant term; profitability, age and real external revenue lift it; sustained losses erode it.
+function survivalScoreOf(a: AgentRow, runwayDays: number | null, profitMicro: Micro, ageDays: number): number {
+  const funding = Math.max(a.fundingMicro, 1);
+  const runway = Math.min(Math.max(runwayDays ?? Infinity, 0) / 30, 1) * 40;
+  const profit = profitMicro >= 0 ? 25 : Math.max(0, 25 * (1 + profitMicro / funding));
+  const age = Math.min(ageDays / 30, 1) * 15;
+  const revenue = Math.min(a.revenueExternalMicro / funding, 1) * 20;
+  return Math.round(Math.max(0, Math.min(100, runway + profit + age + revenue)));
+}
+function gradeOf(s: number) {
+  return s >= 80 ? 'thriving' : s >= 60 ? 'healthy' : s >= 40 ? 'stable' : s >= 20 ? 'at_risk' : 'critical';
+}
+
 function isSimulated(deps: Deps, modelId: string): boolean {
   return deps.llm.mode === 'mock' || modelId.startsWith('mock-');
 }
 
 function toPublic(deps: Deps, a: AgentRow, x: Extras, now: Date): AgentPublic {
   const burn = burnOf(deps, a, x, now);
+  const survivalScore = survivalScoreOf(a, burn.runwayDays, profitOf(a), ageDaysOf(a.bornAt, a.diedAt ?? now));
   const live = liveSteps.get(a.id);
   return {
     id: a.id, name: a.name,
@@ -152,6 +167,10 @@ function toPublic(deps: Deps, a: AgentRow, x: Extras, now: Date): AgentPublic {
     shareStrategy: a.shareStrategy, hasStrategy: !!a.strategy && a.strategy.trim().length > 0,
     revivals: a.revivals, simulated: isSimulated(deps, a.model), spawnError: a.spawnError,
     paidBack: a.fundingMicro > 0 && a.revenueExternalMicro >= a.fundingMicro,
+    tradeRealizedMicro: a.tradeRealizedMicro, tradeVolumeMicro: a.tradeVolumeMicro, creatorRewardMicro: a.creatorRewardMicro,
+    survivalScore, survivalGrade: gradeOf(survivalScore),
+    tokenMint: a.tokenMint, tokenTicker: a.tokenTicker, tokenName: a.tokenName,
+    tokenLaunchedAt: a.tokenLaunchedAt?.toISOString() ?? null,
   };
 }
 
