@@ -838,3 +838,37 @@ select.finput { cursor: pointer; }
 
 /* A tier chip on a disabled card must stay readable: the card's opacity already dims it. */
 button.tool-card:disabled { opacity: 0.45; }
+
+/* ---------- survival score gauge + token ticker chip ---------- */
+
+.survival-score { --sv: var(--dim); display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.survival-score.sv-thriving { --sv: var(--green); }
+.survival-score.sv-healthy { --sv: var(--green); }
+.survival-score.sv-stable { --sv: var(--cyan); }
+.survival-score.sv-at_risk { --sv: var(--amber); }
+.survival-score.sv-critical { --sv: var(--red); }
+.survival-score .sv-gauge {
+  position: relative; flex: 0 0 auto;
+  background: var(--panel3); border: 1px solid var(--line2); overflow: hidden;
+}
+.survival-score .sv-gauge i { display: block; height: 100%; background: var(--sv); }
+.survival-score .sv-meta { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.survival-score .sv-num { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--sv); line-height: 1; }
+.survival-score .sv-grade {
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); white-space: nowrap;
+}
+.survival-score.sv-sm { gap: 6px; }
+.survival-score.sv-sm .sv-gauge { width: 40px; height: 5px; }
+.survival-score.sv-sm .sv-num { font-size: 12px; }
+.survival-score.sv-sm .sv-grade { display: none; }
+.survival-score.sv-md .sv-gauge { width: 84px; height: 7px; }
+.survival-score.sv-md .sv-num { font-size: 16px; }
+.survival-score.sv-lg { flex-direction: column; align-items: flex-start; gap: 8px; }
+.survival-score.sv-lg .sv-gauge { width: 180px; height: 9px; }
+.survival-score.sv-lg .sv-num { font-family: var(--disp); font-size: 30px; }
+
+.ticker-chip {
+  display: inline-block; margin-left: 8px; font-size: 10px; letter-spacing: 0.06em;
+  color: var(--green); border: 1px solid rgba(47, 230, 160, 0.35); border-radius: 2px;
+  padding: 1px 6px; vertical-align: middle; font-variant-numeric: tabular-nums;
+}

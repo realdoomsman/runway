@@ -6,6 +6,8 @@ import { AgentBadges } from '../Badge';
 import { CopyButton } from '../CopyButton';
 import { Countdown } from '../Countdown';
 import { RunwayStrip } from '../RunwayStrip';
+import { SurvivalScore } from './SurvivalScore';
+import { TokenBadge } from './TokenBadge';
 import type { ProfileProps } from './common';
 import { explorerAddressUrl, fmtAgeDays, fmtDate, shortKey } from '../../lib/format';
 import { useAppStore } from '../../store/app';
@@ -80,6 +82,10 @@ export function ProfileHead({ agent }: ProfileProps) {
           </div>
         </div>
         <div className="profile-head-right">
+          <div className="sv-head">
+            <span className="sv-head-label">SURVIVAL</span>
+            <SurvivalScore score={agent.survivalScore} grade={agent.survivalGrade} size="md" />
+          </div>
           <AgentBadges agent={agent} label={spawning ? 'SPAWNING…' : undefined} />
           {agent.revivals > 0 && <span className="chip">REVIVED ×{agent.revivals}</span>}
           {forkable && <span className="chip">STRATEGY PUBLIC</span>}
@@ -94,6 +100,8 @@ export function ProfileHead({ agent }: ProfileProps) {
           )}
         </div>
       </div>
+
+      <TokenBadge token={agent.token} />
 
       {spawning && agent.spawnError && (
         <div className="alert err">

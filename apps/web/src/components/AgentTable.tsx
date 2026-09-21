@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { AgentPublic } from '@runway/shared';
 import { fmtUsd } from '@runway/shared';
 import { AgentBadges } from './Badge';
+import { SurvivalScore } from './profile/SurvivalScore';
 import { EmptyState } from './EmptyState';
 import { RunwayStrip } from './RunwayStrip';
 
@@ -20,6 +21,7 @@ const COLUMNS: Column[] = [
   { key: 'rank', label: '#' },
   { key: 'name', label: 'agent' },
   { key: 'status', label: 'status' },
+  { key: 'survival', label: 'health' },
   { key: 'strip', label: 'runway' },
   { key: 'treasury', label: 'treasury', sort: 'treasury', num: true },
   { key: 'revenue', label: 'ext rev', sort: 'revenue', num: true },
@@ -138,11 +140,13 @@ function Cell({ col, agent: a, rank, linked }: { col: string; agent: AgentPublic
         <>
           <div className="agent-name">
             {linked ? <Link className="row-link" to={`/a/${a.id}`}>{a.name}</Link> : a.name}
+            {a.tokenTicker && <span className="ticker-chip">${a.tokenTicker}</span>}
           </div>
           <div className="agent-id">{a.id}</div>
         </>
       );
     case 'status': return <AgentBadges agent={a} />;
+    case 'survival': return <SurvivalScore score={a.survivalScore} grade={a.survivalGrade} size="sm" />;
     case 'strip': return <RunwayStrip runwayDays={a.runwayDays} status={a.status} ageDays={a.ageDays} size="sm" />;
     case 'treasury': return <>{fmtUsd(a.treasuryMicro)}</>;
     case 'revenue': return <span className={a.revenueExternalMicro > 0 ? 'pos' : undefined}>{fmtUsd(a.revenueExternalMicro)}</span>;

@@ -5,6 +5,7 @@ import type {
   AgentDetail,
   AgentLiveState,
   AgentPublic,
+  AgentTokenInfo,
   AuthNonceResponse,
   AuthVerifyRequest,
   Bounty,
@@ -146,6 +147,9 @@ export const api = {
   /** Deposit-address top-up: creates a `kind:'topup'` purchase against this agent. */
   topUp: (id: string, amountMicro: Micro, path: 'deposit' | 'wallet' = 'deposit') =>
     post<TopUpResponse>(`/api/agents/${enc(id)}/topup`, { amountMicro, path }),
+  /** Launch this agent's one official Pump.fun token (owner-only). 409 if it already has one. */
+  launchToken: (id: string, ticker?: string) =>
+    post<AgentTokenInfo>(`/api/agents/${enc(id)}/launch-token`, ticker ? { ticker } : {}),
 
   graveyard: (q: GraveyardQuery = {}) => get<GraveyardEntry[]>('/api/graveyard', q),
   leaderboard: (by: LeaderboardBy, limit = 25) => get<AgentPublic[]>('/api/leaderboard', { by, limit }),

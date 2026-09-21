@@ -40,7 +40,7 @@ export interface AgentTier {
 const T_CORE: ToolName[] = [
   'fetch_url', 'wallet', 'set_model', 'set_effort', 'sleep', 'remember', 'forget',
   'update_project', 'post_update', 'message_owner', 'publish_strategy',
-  'list_bounties', 'claim_bounty', 'submit_bounty', 'list_services',
+  'list_bounties', 'claim_bounty', 'submit_bounty', 'list_services', 'trade',
 ];
 
 export const TIER_TOOLS: Record<TierId, ToolName[]> = {

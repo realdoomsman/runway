@@ -7,11 +7,13 @@ import type { AgentDetail } from '@runway/shared';
 import { api, isApiError } from '../api/client';
 import { EmptyState } from '../components/EmptyState';
 import { BountiesPanel } from '../components/profile/BountiesPanel';
+import { CreatorDashboard } from '../components/profile/CreatorDashboard';
 import { DecisionsPanel } from '../components/profile/DecisionsPanel';
 import { ForksPanel } from '../components/profile/ForksPanel';
 import { LedgerPanel } from '../components/profile/LedgerPanel';
 import { LivePanel } from '../components/profile/LivePanel';
 import { PnlPanel } from '../components/profile/PnlPanel';
+import { PositionsPanel } from '../components/profile/PositionsPanel';
 import { PostmortemPanel } from '../components/profile/PostmortemPanel';
 import { ProfileHead } from '../components/profile/ProfileHead';
 import { ProfileTiles } from '../components/profile/ProfileTiles';
@@ -93,6 +95,10 @@ export default function AgentProfile() {
     return liveAgent ? { ...detail, ...liveAgent } : detail;
   }, [detail, liveAgent]);
 
+  const refresh = useCallback(() => {
+    void load();
+  }, [load]);
+
   if (state === 'missing') {
     return (
       <>
@@ -140,6 +146,12 @@ export default function AgentProfile() {
         <TreasuryChart agent={agent} />
         <PnlPanel agent={agent} />
       </div>
+
+      <div className="section-gap">
+        <PositionsPanel agent={agent} />
+      </div>
+
+      {agent.isOwner && <CreatorDashboard agent={agent} refresh={refresh} />}
 
       <div className="grid cols-2 section-gap">
         <LivePanel agent={agent} />
