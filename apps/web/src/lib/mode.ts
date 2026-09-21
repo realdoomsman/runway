@@ -54,6 +54,10 @@ export function chainBadge(stats: Pick<GlobalStats, 'chain'> | null): string {
 export function rpcEndpoint(chain: Pick<ChainPublic, 'mode' | 'cluster'> | null): string {
   const override = import.meta.env.VITE_SOLANA_RPC_URL;
   if (override) return override;
+  // Solana mode: talk to the API's own /rpc proxy (server-side Helius key), same origin in prod and
+  // vite-proxied in dev. Public cluster RPCs rate-limit/403 browser calls, which surfaced to buyers
+  // as a false "No USDC token account for this wallet".
+  if (chain?.mode === 'solana' && typeof window !== 'undefined') return `${window.location.origin}/rpc`;
   const cluster = chain?.mode === 'solana' ? chain.cluster : 'devnet';
   return cluster === 'mainnet-beta' ? 'https://api.mainnet-beta.solana.com' : `https://api.${cluster}.solana.com`;
 }

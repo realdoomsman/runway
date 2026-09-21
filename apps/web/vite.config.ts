@@ -33,6 +33,7 @@ export default defineConfig({
       '/ws': { target: API, ws: true, changeOrigin: true },
       '/sites': { target: API, changeOrigin: true },
       '/svc': { target: API, changeOrigin: true },
+      '/rpc': { target: API, changeOrigin: true },
     },
   },
 });

@@ -182,18 +182,26 @@ export default function Buy() {
     if (disabledReason !== null) return;
     setBusy('wallet');
     setError(null);
+    let createdId: string | null = null;
+    let paid = false;
     try {
       setWalletStage('CREATING…');
       const res = await api.createPurchase({ ...createBody(), path: 'wallet' });
       const { purchase } = res;
+      createdId = purchase.id;
       if (!purchase.depositPubkey) throw new Error('The purchase has no deposit address to pay.');
       setWalletStage('SIGN IN WALLET…');
       const txSig = await sendUsdc(purchase.depositPubkey, amountMicro, `SCALE ${purchase.id}`);
+      paid = true;
       setWalletStage('CONFIRMING…');
       await api.attachPayment(purchase.id, txSig);
       void useWalletStore.getState().refreshMe();
       navigate(`/buy/${purchase.id}`, { state: { claimCode: res.claimCode } });
     } catch (e) {
+      // If USDC never left the wallet, release the name the pending purchase reserved so retrying the
+      // same name is not falsely rejected as taken. If payment did go out, leave it: the poller still
+      // fulfils it even when attach fails, and cancelling would strand the money.
+      if (createdId && !paid) void api.cancelPurchase(createdId).catch(() => {});
       fail(e, 'The wallet payment did not go through.');
     }
   };

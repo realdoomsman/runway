@@ -39,13 +39,24 @@ export async function sendUsdcTransfer(p: UsdcTransferParams): Promise<string> {
   tx.add(createTransferCheckedInstruction(source, mint, dest, p.owner, BigInt(p.amountMicro), USDC_DECIMALS));
   if (p.memo) tx.add(new TransactionInstruction({ programId: MEMO_PROGRAM_ID, keys: [], data: Buffer.from(p.memo, 'utf8') }));
 
-  const { blockhash, lastValidBlockHeight } = await p.connection.getLatestBlockhash('confirmed');
+  const { blockhash } = await p.connection.getLatestBlockhash('confirmed');
   tx.recentBlockhash = blockhash;
   tx.feePayer = p.owner;
 
   const signature = await p.sendTransaction(tx, p.connection);
-  const conf = await p.connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
-  if (conf.value.err) throw new Error(`Transaction failed: ${JSON.stringify(conf.value.err)}`);
+  // Poll the signature over HTTP instead of confirmTransaction's websocket subscription: the wallet
+  // RPC goes through the API's /rpc proxy, which is HTTP-only.
+  const deadline = Date.now() + 90_000;
+  for (;;) {
+    const { value } = await p.connection.getSignatureStatuses([signature]);
+    const status = value[0];
+    if (status?.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+    if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) break;
+    if (Date.now() > deadline) throw new Error('Timed out waiting for the payment to confirm; it may still land.');
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 1500);
+    await promise;
+  }
   return signature;
 }
 

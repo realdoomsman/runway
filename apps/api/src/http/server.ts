@@ -19,6 +19,7 @@ import { marketRoutes } from './routes/market.js';
 import { meRoutes } from './routes/me.js';
 import { purchaseRoutes } from './routes/purchases.js';
 import { statsRoutes } from './routes/stats.js';
+import { rpcRoutes } from './routes/rpc.js';
 import { treasuryRoutes } from './routes/treasury.js';
 import { registerWebApp } from './static.js';
 import { createStatsCache } from './stats-cache.js';
@@ -75,6 +76,7 @@ export async function createApp(deps: Deps, opts: AppOptions = {}): Promise<Fast
   await marketRoutes(app, deps, auth);
   await statsRoutes(app, deps, stats);
   await treasuryRoutes(app, deps);
+  await rpcRoutes(app, deps);
 
   const hosting = opts.hosting === undefined ? registerHosting : opts.hosting;
   if (hosting) await app.register(async (child) => hosting(child, deps));
