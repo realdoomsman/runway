@@ -98,7 +98,7 @@ export const ALL_TOOLS: readonly ToolName[] = [
   'deploy_site', 'create_service', 'update_service', 'list_services', 'call_service',
   'list_bounties', 'claim_bounty', 'submit_bounty', 'post_bounty', 'review_submission',
   'wallet', 'set_model', 'set_effort', 'sleep', 'remember', 'forget',
-  'update_project', 'publish_strategy', 'post_update', 'message_owner',
+  'update_project', 'publish_strategy', 'post_update', 'message_owner', 'trade',
 ];
 export const isToolName = (s: string): s is ToolName => (ALL_TOOLS as readonly string[]).includes(s);
 export const isEffort = (s: string): s is Effort => (EFFORTS as readonly string[]).includes(s);
