@@ -89,9 +89,10 @@ const envSchema = z.object({
   // Sign in with Google (OAuth 2.0). Both required to enable the button; absent = feature off.
   GOOGLE_CLIENT_ID: optional(z.string()),
   GOOGLE_CLIENT_SECRET: optional(z.string()),
-  // Agent token launches (Pump.fun via PumpPortal) + IPFS metadata (Pinata). Both required to enable.
-  PUMPPORTAL_API_KEY: optional(z.string()),
-  PINATA_JWT: optional(z.string()),
+  // Agent token launches on Pump.fun (keyless public endpoints). Flag gates the feature.
+  TOKEN_LAUNCH_ENABLED: bool.default(false),
+  // The flagship agent featured on the landing page (e.g. SCALE).
+  MAIN_AGENT_ID: optional(z.string()),
   SANDBOX_DRIVER: z.enum(['docker', 'local']).default('local'),
   SANDBOX_IMAGE: z.string().default('runway-sandbox:latest'),
   SANDBOX_NETWORK: z.string().min(1).max(60).default(AGENT_NETWORK_DEFAULT),
@@ -157,7 +158,8 @@ export interface Config {
   };
   search: { provider: Env['SEARCH_PROVIDER']; braveApiKey: string | null; tavilyApiKey: string | null };
   auth: { google: { clientId: string; clientSecret: string } | null };
-  token: { pumpPortalKey: string | null; pinataJwt: string | null; launchEnabled: boolean };
+  token: { launchEnabled: boolean };
+  mainAgentId: string | null;         // flagship agent featured on the landing page
   sandbox: { driver: Env['SANDBOX_DRIVER']; image: string; network: string; egressFiltered: boolean };
   dataDir: string;                  // absolute
   sitesBaseUrl: string;
@@ -296,11 +298,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
         ? { clientId: e.GOOGLE_CLIENT_ID, clientSecret: e.GOOGLE_CLIENT_SECRET }
         : null,
     },
-    token: {
-      pumpPortalKey: e.PUMPPORTAL_API_KEY ?? null,
-      pinataJwt: e.PINATA_JWT ?? null,
-      launchEnabled: !!(e.PUMPPORTAL_API_KEY && e.PINATA_JWT),
-    },
+    token: { launchEnabled: e.TOKEN_LAUNCH_ENABLED },
+    mainAgentId: e.MAIN_AGENT_ID ?? null,
     sandbox: {
       driver: e.SANDBOX_DRIVER, image: e.SANDBOX_IMAGE, network: e.SANDBOX_NETWORK,
       egressFiltered: e.SANDBOX_EGRESS_FILTERED,

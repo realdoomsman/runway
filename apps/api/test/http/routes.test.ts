@@ -64,7 +64,7 @@ describe('GET /api/health', () => {
     expect(json<HealthResponse>(res)).toEqual({
       ok: true, version: t.deps.config.version, demo: true,
       chain: { mode: 'memory', cluster: 'memory' }, llm: 'mock', sandbox: 'local',
-      payments: { mode: 'memory', simulateEnabled: true }, googleAuth: false,
+      payments: { mode: 'memory', simulateEnabled: true }, googleAuth: false, mainAgentId: null, tokenLaunch: false,
     });
   });
 });

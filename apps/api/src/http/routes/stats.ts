@@ -26,6 +26,8 @@ export async function statsRoutes(app: FastifyInstance, deps: Deps, stats: Stats
     sandbox: deps.sandbox.name,
     payments: { mode: deps.chain.mode, simulateEnabled: deps.chain.mode === 'memory' },
     googleAuth: config.auth.google !== null,
+    mainAgentId: config.mainAgentId,
+    tokenLaunch: config.token.launchEnabled,
   }));
 
   app.get('/api/stats', async () => stats.get());

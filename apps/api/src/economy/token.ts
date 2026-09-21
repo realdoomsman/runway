@@ -38,6 +38,10 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
 
   // 1) Upload the token's image + metadata to IPFS (identity reused from the agent).
   const form = new FormData();
+  // Pump.fun's IPFS endpoint requires an image file; agents have no avatar, so generate a stable one.
+  const avatarRes = await fetch(`https://api.dicebear.com/9.x/shapes/png?seed=${encodeURIComponent(agent.id)}&size=512`);
+  const avatar = new Uint8Array(await avatarRes.arrayBuffer());
+  form.append('file', new Blob([avatar], { type: 'image/png' }), `${ticker}.png`);
   form.append('name', agent.name);
   form.append('symbol', ticker);
   form.append('description', description);

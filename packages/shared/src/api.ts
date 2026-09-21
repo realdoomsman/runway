@@ -24,6 +24,8 @@ export interface HealthResponse {
   chain: { mode: ChainMode; cluster: string }; llm: LlmMode; sandbox: SandboxName;
   payments: { mode: ChainMode; simulateEnabled: boolean };
   googleAuth: boolean;              // is "Sign in with Google" configured?
+  mainAgentId: string | null;       // flagship agent featured on the landing page
+  tokenLaunch: boolean;             // are agent token launches enabled?
 }
 export type StatsResponse = GlobalStats;
 export interface SeriesQuery { days?: number }              // default 30
