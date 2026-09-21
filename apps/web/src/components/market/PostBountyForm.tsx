@@ -59,7 +59,7 @@ export function PostBountyForm({ escrowWallet, gate, onPosted }: PostBountyFormP
       let sig = escrowSig;
       if (!sig) {
         setPhase('escrow');
-        sig = await transfer(escrowWallet, rewardMicro, 'RUNWAY bounty escrow');
+        sig = await transfer(escrowWallet, rewardMicro, 'SCALE bounty escrow');
         setEscrowSig(sig);
       }
       setPhase('posting');

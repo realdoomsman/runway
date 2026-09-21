@@ -1,4 +1,4 @@
-// Protocol-posted bounties for the demo colony (SPEC §8.18). RUNWAY escrows the reward like any
+// Protocol-posted bounties for the demo colony (SPEC §8.18). SCALE escrows the reward like any
 // other poster; the simulator also plays the operator who reviews what agents submit, because
 // `posterType: 'protocol'` has no human reviewer behind it.
 import { and, eq } from 'drizzle-orm';
@@ -18,7 +18,7 @@ const APPROVE_CHANCE = 0.75;
 interface BountySpec { title: string; description: string; rewardUsd: number }
 
 const SPECS: readonly BountySpec[] = [
-  { title: 'Write a one-page explainer for new agents', description: 'Explain, in under 400 words, how an agent on RUNWAY pays rent, earns revenue and dies. Plain language, no hype, no token talk. Deliver the finished text in the submission.', rewardUsd: 0.75 },
+  { title: 'Write a one-page explainer for new agents', description: 'Explain, in under 400 words, how an agent on SCALE pays rent, earns revenue and dies. Plain language, no hype, no token talk. Deliver the finished text in the submission.', rewardUsd: 0.75 },
   { title: 'Benchmark three agent services and publish the numbers', description: 'Call three live services from the market, record latency and output quality for each, and submit a comparison table a buyer could act on.', rewardUsd: 1.25 },
   { title: 'Ship a status page for your own endpoints', description: 'Deploy a static page that lists every endpoint you sell, its price and whether it answered on the last check. Submit the URL.', rewardUsd: 1 },
   { title: 'Document a strategy that paid for itself', description: 'Describe a strategy you actually ran, with the real numbers: what it cost, what it earned, and when it broke even. No projections.', rewardUsd: 1.5 },
@@ -30,7 +30,7 @@ const SPECS: readonly BountySpec[] = [
   { title: 'Make one page that sells one thing', description: 'Deploy a landing page with a single offer, a single price and a single call to action. Submit the URL and the reasoning.', rewardUsd: 1.2 },
 ];
 
-// Posts one bounty from RUNWAY, escrowing the reward first exactly like a user poster does.
+// Posts one bounty from SCALE, escrowing the reward first exactly like a user poster does.
 export async function postProtocolBounty(deps: CoreDeps, spec: BountySpec, deadlineHours: number): Promise<BountyRow> {
   const rewardMicro = usd(spec.rewardUsd);
   const now = deps.clock.now();
@@ -44,7 +44,7 @@ export async function postProtocolBounty(deps: CoreDeps, spec: BountySpec, deadl
     }).returning();
     await addEvent(deps, tx, {
       kind: 'bounty', amountMicro: rewardMicro, ts: now,
-      text: `RUNWAY posted a bounty: "${spec.title}" for ${fmtUsd(rewardMicro)}`,
+      text: `SCALE posted a bounty: "${spec.title}" for ${fmtUsd(rewardMicro)}`,
       meta: { bountyId: id, posterType: 'protocol' },
     });
     return row!;
@@ -93,7 +93,7 @@ async function reviewOne(deps: CoreDeps, row: BountyRow, claimerId: string, appr
       kind: 'bounty', agentId: claimerId, agentName: claimer.name, amountMicro: row.rewardMicro, ts: now,
       text: released
         ? `"${row.title}" is open again after a second rejection`
-        : `${claimer.name}'s submission for "${row.title}" was rejected by RUNWAY`,
+        : `${claimer.name}'s submission for "${row.title}" was rejected by SCALE`,
       meta: { bountyId: row.id, posterType: 'protocol', rejections },
     }));
     return true;
@@ -112,7 +112,7 @@ async function reviewOne(deps: CoreDeps, row: BountyRow, claimerId: string, appr
   }
   await withTx(deps.db, (tx) => addEvent(deps, tx, {
     kind: 'bounty', agentId: claimerId, agentName: claimer.name, amountMicro: row.rewardMicro, ts: now,
-    text: `${claimer.name} was paid ${fmtUsd(row.rewardMicro)} by RUNWAY for "${row.title}"`,
+    text: `${claimer.name} was paid ${fmtUsd(row.rewardMicro)} by SCALE for "${row.title}"`,
     meta: { bountyId: row.id, posterType: 'protocol', txSig: sig },
   }));
   return true;

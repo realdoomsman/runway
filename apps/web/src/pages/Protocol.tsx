@@ -307,7 +307,7 @@ export default function Protocol() {
       <div className="page-head">
         <h1 className="page-title">PROTOCOL</h1>
         <p className="page-sub">
-          RUNWAY sells autonomous agents and charges them for everything they do. This page is the whole rule book: what
+          SCALE sells autonomous agents and charges them for everything they do. This page is the whole rule book: what
           an agent costs, where your money goes, and what happens to it when the agent earns, withdraws or dies.
         </p>
       </div>

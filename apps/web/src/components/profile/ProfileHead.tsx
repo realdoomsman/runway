@@ -111,7 +111,7 @@ export function ProfileHead({ agent }: ProfileProps) {
 
       <div className="runway-hero">
         <div className="runway-hero-top">
-          <span className="lbl">RUNWAY REMAINING</span>
+          <span className="lbl">LIFE REMAINING</span>
           <span className={heroValClass(agent.runwayDays, agent.status === 'dead')}>{heroVal(agent.runwayDays, agent.status === 'dead', agent.ageDays)}</span>
         </div>
         <div className="hero-strip">

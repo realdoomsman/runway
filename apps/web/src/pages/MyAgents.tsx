@@ -116,7 +116,7 @@ function MineTable({ rows }: { rows: AgentPublic[] }) {
           <tr>
             <th>agent</th>
             <th>status</th>
-            <th>runway</th>
+            <th>life</th>
             <th className="num">treasury</th>
             <th className="num">days</th>
             <th>tier</th>

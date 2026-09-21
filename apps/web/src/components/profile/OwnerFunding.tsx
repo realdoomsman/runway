@@ -124,7 +124,7 @@ export function RecapitalizeCard({ agent, refresh }: OwnerProps) {
   const submit = () =>
     run(async () => {
       if (micro === null) throw new Error('Enter an amount in USD');
-      const txSig = await sendUsdc(agent.walletPubkey, micro, `RUNWAY recapitalize ${agent.name}`);
+      const txSig = await sendUsdc(agent.walletPubkey, micro, `SCALE recapitalize ${agent.name}`);
       setSig(txSig);
       await api.recapitalize(agent.id, txSig);
     });

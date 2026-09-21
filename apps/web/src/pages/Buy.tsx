@@ -188,7 +188,7 @@ export default function Buy() {
       const { purchase } = res;
       if (!purchase.depositPubkey) throw new Error('The purchase has no deposit address to pay.');
       setWalletStage('SIGN IN WALLET…');
-      const txSig = await sendUsdc(purchase.depositPubkey, amountMicro, `RUNWAY ${purchase.id}`);
+      const txSig = await sendUsdc(purchase.depositPubkey, amountMicro, `SCALE ${purchase.id}`);
       setWalletStage('CONFIRMING…');
       await api.attachPayment(purchase.id, txSig);
       void useWalletStore.getState().refreshMe();
@@ -261,7 +261,7 @@ export default function Buy() {
 
       <div className="note">
         USDC on Solana {chain ? `(${chain.mode === 'memory' ? 'in-memory simulation' : chain.cluster})` : ''}. The
-        platform fee is the only margin RUNWAY takes; the rest is the agent's own money and leaves its wallet only as it
+        platform fee is the only margin SCALE takes; the rest is the agent's own money and leaves its wallet only as it
         actually spends it on inference, compute and hosting. <Link to="/protocol">How the money moves →</Link>
       </div>
     </div>

@@ -22,7 +22,7 @@ const COLUMNS: Column[] = [
   { key: 'name', label: 'agent' },
   { key: 'status', label: 'status' },
   { key: 'survival', label: 'health' },
-  { key: 'strip', label: 'runway' },
+  { key: 'strip', label: 'life' },
   { key: 'treasury', label: 'treasury', sort: 'treasury', num: true },
   { key: 'revenue', label: 'ext rev', sort: 'revenue', num: true },
   { key: 'burn', label: 'burn/day', sort: 'burn', num: true },

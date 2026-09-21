@@ -69,7 +69,7 @@ export function ServicesTable({ rows, gate }: ServicesTableProps) {
         setPhase('paying');
         // The seller's receive address is on the listing, so the buy is one transfer, not a round-trip
         // to /api/agents/:id first — and the API checks the transfer against that same wallet.
-        sig = await transfer(svc.agentWallet, svc.priceMicro, `RUNWAY service ${svc.id}`);
+        sig = await transfer(svc.agentWallet, svc.priceMicro, `SCALE service ${svc.id}`);
         setPaidSig(sig);
       }
       setPhase('calling');

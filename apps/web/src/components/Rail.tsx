@@ -69,12 +69,12 @@ function RailMine() {
   );
 }
 
-/** "RUNWAY▌" with 5 lights: round(5 × alive / max(1, alive + dead)) green, rest end-dead (D31). */
+/** "SCALE▌" with 5 lights: round(5 × alive / max(1, alive + dead)) green, rest end-dead (D31). */
 function Wordmark({ alive, dead }: { alive: number; dead: number }) {
   const lit = Math.round((WORDMARK_LIGHTS * alive) / Math.max(1, alive + dead));
   return (
     <div className="wordmark">
-      RUNWAY
+      SCALE
       <span className="cursor" />
       <span className="wordmark-lights rw-lights" aria-hidden>
         {Array.from({ length: WORDMARK_LIGHTS }, (_, i) => (

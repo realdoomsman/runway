@@ -24,7 +24,7 @@ describe('SIWS message helpers', () => {
   it('round-trips the exact message format', () => {
     const issued = new Date('2026-09-16T12:00:00.000Z');
     const message = buildSignInMessage(wallet, 'abcdefghijklmnopqrstuvwx', issued);
-    expect(message).toBe(`RUNWAY wants you to sign in.\nWallet: ${wallet}\nNonce: abcdefghijklmnopqrstuvwx\nIssued: 2026-09-16T12:00:00.000Z\nThis signature does not send a transaction.`);
+    expect(message).toBe(`SCALE wants you to sign in.\nWallet: ${wallet}\nNonce: abcdefghijklmnopqrstuvwx\nIssued: 2026-09-16T12:00:00.000Z\nThis signature does not send a transaction.`);
     expect(parseSignInMessage(message)).toEqual({ wallet, nonce: 'abcdefghijklmnopqrstuvwx', issued: '2026-09-16T12:00:00.000Z' });
     expect(parseSignInMessage(`${message}\nextra`)).toBeNull();
   });
@@ -43,7 +43,7 @@ describe('sign-in flow', () => {
   it('nonce → sign → verify → cookie → /api/me', async () => {
     t = await buildTestApp();
     const message = await nonce(t.app);
-    expect(message.startsWith('RUNWAY wants you to sign in.\nWallet: ')).toBe(true);
+    expect(message.startsWith('SCALE wants you to sign in.\nWallet: ')).toBe(true);
 
     const verify = await t.app.inject(web({ method: 'POST', url: '/api/auth/verify', payload: { wallet, signature: sign(message), message } }));
     expect(verify.statusCode).toBe(200);

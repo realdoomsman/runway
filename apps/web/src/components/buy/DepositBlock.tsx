@@ -5,10 +5,10 @@ import { fmtUsd } from '@runway/shared';
 import { CopyButton } from '../CopyButton';
 import { explorerAddressUrl } from '../../lib/format';
 
-/** `solana:<pubkey>?amount=<usd>&spl-token=<mint>&label=RUNWAY` — the Solana Pay transfer URI. */
+/** `solana:<pubkey>?amount=<usd>&spl-token=<mint>&label=SCALE` — the Solana Pay transfer URI. */
 export function solanaPayUri(pubkey: string, amountMicro: Micro, usdcMint: string): string {
   const amount = (amountMicro / 1_000_000).toFixed(2);
-  return `solana:${pubkey}?amount=${amount}&spl-token=${usdcMint}&label=RUNWAY`;
+  return `solana:${pubkey}?amount=${amount}&spl-token=${usdcMint}&label=SCALE`;
 }
 
 interface DepositBlockProps {
