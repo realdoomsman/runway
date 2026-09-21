@@ -17,6 +17,7 @@ import { die } from './death.js';
 import { chargeRent } from './rent.js';
 import { runSettlement } from './settlement.js';
 import { runStep } from './step.js';
+import { claimAllCreatorFees } from '../economy/token.js';
 
 export const POLL_MS = 5_000;
 export const STATS_MS = 30_000;
@@ -25,8 +26,9 @@ export const BOUNTY_SWEEP_MS = 5 * 60_000;
 export const SPAWN_RETRY_MS = 60_000;
 export const IDLE_RENT_MS = HOUR_MS;
 export const SHUTDOWN_GRACE_MS = STEP_TIMEOUT_MS;
+export const CREATOR_FEES_MS = 2 * HOUR_MS;   // claim + book Pump.fun creator fees for tokenized agents
 
-export type JobName = 'treasury' | 'stats' | 'settlement' | 'bounties' | 'rent' | 'spawns' | 'cleanup';
+export type JobName = 'treasury' | 'stats' | 'settlement' | 'bounties' | 'rent' | 'spawns' | 'cleanup' | 'creator_fees';
 
 export interface Scheduler {
   start(): Promise<void>;
@@ -54,6 +56,7 @@ export function createScheduler(deps: Deps): Scheduler {
     { name: 'rent', everyMs: IDLE_RENT_MS, delayMs: 60_000, run: async () => { await chargeIdleRent(deps); } },
     { name: 'settlement', everyMs: HOUR_MS, delayMs: HOUR_MS, run: async () => { await runSettlement(deps); } },
     { name: 'cleanup', everyMs: DAY_MS, delayMs: 5 * 60_000, run: () => dailyCleanup(deps) },
+    { name: 'creator_fees', everyMs: CREATOR_FEES_MS, delayMs: 5 * 60_000, run: () => claimAllCreatorFees(deps) },
   ];
 
   async function runJob(name: JobName): Promise<void> {

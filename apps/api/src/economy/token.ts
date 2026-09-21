@@ -5,7 +5,7 @@
 // wallet — that is the funding loop. Metadata is generated from the agent's existing identity (name,
 // purpose, public page). No coin is ever created unless an owner explicitly calls launchAgentToken AND
 // token launches are enabled on the deployment (config.token.launchEnabled).
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull } from 'drizzle-orm';
 import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
 import { type AgentTokenInfo, type TreasurySplit } from '@runway/shared';
 import { keypairFromSecret } from '../chain/keys.js';
@@ -14,10 +14,14 @@ import type { CoreDeps } from '../core/interfaces.js';
 import { agents } from '../db/schema.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { addEvent } from './events.js';
+import { post } from './ledger.js';
 
 const PUMPPORTAL_LOCAL = 'https://pumpportal.fun/api/trade-local';   // builds an unsigned tx for our wallet (no api key)
 const PUMP_IPFS = 'https://pump.fun/api/ipfs';                        // hosts token image + metadata
 const TICKER_RE = /^[A-Z0-9]{2,10}$/;
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const CLAIM_GAS_KEEP_LAMPORTS = 6_000_000;   // ~0.006 SOL the agent keeps for its own gas
+const MIN_CLAIM_LAMPORTS = 2_000_000;        // don't bother converting a claim smaller than ~0.002 SOL
 
 export const pumpUrl = (mint: string): string => `https://pump.fun/${mint}`;
 const defaultTicker = (name: string): string => (name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) || 'AGENT');
@@ -83,13 +87,15 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
   return { mint: mintStr, name: agent.name, ticker, launchedAt: now.toISOString(), pumpUrl: pumpUrl(mintStr) };
 }
 
-// Claims the agent's accumulated Pump.fun creator fees into its own wallet, then books them into the
-// treasury as `creator_reward`. Signed by the agent (the creator). Called by a periodic job.
-export async function claimCreatorFees(deps: CoreDeps, agentId: string): Promise<{ ok: boolean }> {
+// Claims the agent's accumulated Pump.fun creator fees (paid in SOL) into its own wallet, converts the
+// proceeds to USDC and books them into the treasury as `creator_reward`. Signed by the agent (the
+// creator). Returns how much USDC was booked. Run by the periodic `creator_fees` job.
+export async function claimCreatorFees(deps: CoreDeps, agentId: string): Promise<{ ok: boolean; bookedMicro: number }> {
   const [agent] = await deps.db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
-  if (!agent?.tokenMint) return { ok: false };
+  if (!agent?.tokenMint) return { ok: false, bookedMicro: 0 };
   const conn = new Connection(deps.config.chain.rpcUrl, 'confirmed');
   try {
+    const solBefore = await deps.chain.getSolBalance(agent.walletPubkey);
     await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, async (secret) => {
       const agentKp = keypairFromSecret(secret);
       const built = await fetch(PUMPPORTAL_LOCAL, {
@@ -103,21 +109,40 @@ export async function claimCreatorFees(deps: CoreDeps, agentId: string): Promise
       await conn.confirmTransaction(sig, 'confirmed');
       return sig;
     });
-    return { ok: true };
+    // Fees land as SOL. Convert everything above the gas reserve to USDC and book it as revenue.
+    const solAfter = await deps.chain.getSolBalance(agent.walletPubkey);
+    const gained = solAfter - solBefore;                       // fees received minus the gas this claim cost
+    const swappable = Math.min(gained, Math.max(0, solAfter - CLAIM_GAS_KEEP_LAMPORTS));
+    if (swappable < MIN_CLAIM_LAMPORTS) return { ok: true, bookedMicro: 0 };
+    const { outAmount } = await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, (secret) =>
+      deps.chain.swap(secret, SOL_MINT, deps.chain.usdcMint, swappable, deps.config.trading.slippageBps));
+    if (outAmount > 0) {
+      await post(deps, deps.db, { agentId, kind: 'creator_reward', amountMicro: outAmount, memo: 'creator fees claimed' });
+      await addEvent(deps, deps.db, { kind: 'revenue', agentId, agentName: agent.name, text: `${agent.name} claimed $${(outAmount / 1e6).toFixed(2)} in creator fees from $${agent.tokenTicker ?? ''}`, amountMicro: outAmount });
+    }
+    return { ok: true, bookedMicro: outAmount };
   } catch (e) {
     deps.log.warn({ agentId, err: e instanceof Error ? e.message : String(e) }, 'creator-fee claim failed');
-    return { ok: false };
+    return { ok: false, bookedMicro: 0 };
   }
 }
 
-// Sub-treasury split for the dashboard (token spec): incoming resources are conceptually divided into
-// operating, AI credits, strategy capital and a reserve (40% operating+credits / 40% strategy / 20%
-// reserve). Presented against the liquid treasury so the creator sees the allocation at a glance.
-export function treasurySplit(treasuryMicro: number): TreasurySplit {
-  const operatingMicro = Math.round(treasuryMicro * 0.2);
-  const creditsMicro = Math.round(treasuryMicro * 0.2);
-  const strategyMicro = Math.round(treasuryMicro * 0.4);
-  return { operatingMicro, creditsMicro, strategyMicro, reserveMicro: treasuryMicro - operatingMicro - creditsMicro - strategyMicro };
+// The periodic job: claim + book creator fees for every tokenized agent. No-op while no agent has a token.
+export async function claimAllCreatorFees(deps: CoreDeps): Promise<void> {
+  const rows = await deps.db.select({ id: agents.id }).from(agents).where(isNotNull(agents.tokenMint));
+  for (const { id } of rows) {
+    if (deps.clock) { /* serialise: one claim at a time keeps RPC + gas sane */ }
+    await claimCreatorFees(deps, id);
+  }
+}
+
+// Treasury breakdown for the dashboard — REAL numbers, not a cosmetic split: the reserve is the liquid
+// floor the trading engine will never spend below, and the rest is deployable capital the agent can put
+// to work (trades, tools, ops). `open` is the marked-to-market value of positions it currently holds.
+export function treasurySplit(treasuryMicro: number, minReserveMicro: number, openPositionsMicro = 0): TreasurySplit {
+  const reserveMicro = Math.min(treasuryMicro, minReserveMicro);
+  const deployableMicro = Math.max(0, treasuryMicro - reserveMicro);
+  return { reserveMicro, deployableMicro, openPositionsMicro };
 }
 
 export const tokenInfoOf = (a: { tokenMint: string | null; tokenName: string | null; tokenTicker: string | null; tokenLaunchedAt: Date | null }): AgentTokenInfo | null =>

@@ -33,7 +33,12 @@ function TokenCard({ agent, refresh }: OwnerProps) {
             BUY ON PUMP.FUN ↗
           </a>
         </div>
-        <div className="note">One agent, one token. Creator fees from trading flow back into the treasury split below.</div>
+        <div className="fee-wallet section-gap">
+          <span className="k">CREATOR FEE WALLET</span>
+          <span className="mono-num" title={agent.walletPubkey}>{shortKey(agent.walletPubkey, 6, 6)}</span>
+          <CopyButton text={agent.walletPubkey} />
+        </div>
+        <div className="note">${token.ticker} creator fees accrue to this agent's own wallet and are automatically claimed into its treasury every few hours (converted to USDC). One agent, one token — permanent.</div>
       </div>
     );
   }
@@ -85,10 +90,9 @@ function TokenCard({ agent, refresh }: OwnerProps) {
 function TreasurySplitCard({ agent }: ProfileProps) {
   const s = agent.treasurySplit;
   const rows: [string, number][] = [
-    ['OPERATING', s.operatingMicro],
-    ['AI CREDITS', s.creditsMicro],
-    ['STRATEGY', s.strategyMicro],
-    ['RESERVE', s.reserveMicro],
+    ['PROTECTED RESERVE', s.reserveMicro],
+    ['DEPLOYABLE', s.deployableMicro],
+    ['OPEN POSITIONS', s.openPositionsMicro],
   ];
 
   return (
@@ -102,7 +106,7 @@ function TreasurySplitCard({ agent }: ProfileProps) {
           </div>
         ))}
       </div>
-      <div className="note">How the agent's earnings are held across its sub-treasuries.</div>
+      <div className="note">Reserve is the liquid floor the agent never trades below; deployable is capital it can put to work; open positions are marked to market.</div>
     </div>
   );
 }

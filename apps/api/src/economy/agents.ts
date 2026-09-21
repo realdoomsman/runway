@@ -247,7 +247,7 @@ export async function loadDetail(deps: Deps, a: AgentRow, viewerOwnerId: string 
     positions,
     trades: tradeRows.map((t) => ({ id: t.id, ts: t.ts.toISOString(), action: t.action, symbol: t.symbol, usdcMicro: t.usdcMicro, realizedPnlMicro: t.realizedPnlMicro, txSig: t.txSig })),
     token: tokenInfoOf(a),
-    treasurySplit: treasurySplit(a.treasuryMicro),
+    treasurySplit: treasurySplit(a.treasuryMicro, deps.config.trading.minReserveMicro, positions.reduce((sum, p) => sum + p.valueMicro, 0)),
   };
 }
 

@@ -134,7 +134,7 @@ export type SurvivalGrade = 'thriving' | 'healthy' | 'stable' | 'at_risk' | 'cri
 
 // An agent's one official token (Pump.fun) and the sub-treasury split its creator rewards fund.
 export interface AgentTokenInfo { mint: string; name: string; ticker: string; launchedAt: string; pumpUrl: string }
-export interface TreasurySplit { operatingMicro: Micro; creditsMicro: Micro; strategyMicro: Micro; reserveMicro: Micro }
+export interface TreasurySplit { reserveMicro: Micro; deployableMicro: Micro; openPositionsMicro: Micro }
 
 // Graveyard rows (AMENDMENTS D37): the card renders the first sentence of the post-mortem, which is
 // too heavy for AgentPublic (list rows, leaderboards and every WS `agent` patch use that shape).
