@@ -42,6 +42,7 @@ export function fakeLlm(opts: { replies?: Reply[]; models?: ModelInfo[]; mode?: 
         content, usage, model: req.model,
         stopReason: partial.stopReason ?? (content.some((c) => c.type === 'tool_use') ? 'tool_use' : 'end_turn'),
         ...(partial.stopDetails ? { stopDetails: partial.stopDetails } : {}),
+        ...(partial.payment ? { payment: partial.payment } : {}),
       };
     },
   };

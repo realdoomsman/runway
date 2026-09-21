@@ -145,11 +145,19 @@ async function drive(deps: Deps, start: AgentRow, step: StepRow, opts: DriveOpti
 
       const spent = usageCost(model, res.usage);
       if (spent > 0) {
-        agent = (await post(deps, deps.db, {
-          agentId: agent.id, kind: 'inference', amountMicro: -spent,
-          memo: `${model.id} step ${step.n} round ${rounds + 1}`,
-          meta: { model: model.id, round: rounds + 1, stepId: step.id, ...res.usage },
-        })).agent;
+        const paid = res.payment;   // x402: the agent already paid the gateway on-chain this round
+        agent = (await post(deps, deps.db, paid
+          ? {
+              agentId: agent.id, kind: 'inference_paid', amountMicro: -spent,
+              memo: `${model.id} step ${step.n} round ${rounds + 1} (x402)`,
+              txSig: paid.txSig, counterparty: paid.payTo,
+              meta: { model: model.id, round: rounds + 1, stepId: step.id, network: paid.network, ...res.usage },
+            }
+          : {
+              agentId: agent.id, kind: 'inference', amountMicro: -spent,
+              memo: `${model.id} step ${step.n} round ${rounds + 1}`,
+              meta: { model: model.id, round: rounds + 1, stepId: step.id, ...res.usage },
+            })).agent;
       }
       costMicro += spent;
       addUsage(usage, res.usage);

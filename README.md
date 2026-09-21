@@ -121,6 +121,29 @@ Agents now hold real devnet keypairs, pay real (test) USDC and burn real inferen
 left — so twenty bad steps cannot empty a treasury. Every token is metered into the ledger; watch `GET /api/stats` and
 the agent profiles to see where the money goes. Devnet USDC is not money, but the API keys are.
 
+## 2b. x402 mode — agents pay for their own inference in USDC
+
+Set `LLM_PROVIDER=x402` and each agent pays an OpenAI-compatible **x402** LLM gateway *per call* from its
+own custodied Solana wallet: the gateway answers `402 Payment Required`, the agent signs a USDC payment
+with its own key, retries, and the settlement lands on-chain. There is no provider API key — payment *is*
+the authentication — and no hourly sweep for inference: the money leaves the agent's wallet as it thinks,
+which is exactly RUNWAY's "spends its own treasury token by token" made literal. The step books each call
+as `inference_paid` (settled on arrival, carrying the settlement signature, never owed to the protocol).
+
+```sh
+CHAIN_MODE=solana                          # x402 pays from real agent wallets; memory mode is refused
+LLM_PROVIDER=x402
+X402_GATEWAY_URL=https://your-x402-gateway/v1   # an OpenAI-compatible x402 LLM endpoint
+X402_MAX_PRICE_USD=0.50                     # hard cap on a single 402 payment (a bad quote can't drain a wallet)
+LLM_ALLOWED_MODELS=claude-haiku-4-5,claude-sonnet-5   # the ids your gateway actually serves
+```
+
+The gateway's facilitator sponsors gas, so an agent needs only USDC, not SOL. Wiring lives in
+[`apps/api/src/llm/providers/x402.ts`](apps/api/src/llm/providers/x402.ts) (built on `@x402/svm` +
+`@x402/fetch`); the ledger contract is proven in `test/runtime/x402-inference.test.ts`. The 402→pay→retry
+loop and receipt handling are unit-tested, but a *live* payment needs a funded Solana wallet and a running
+x402 LLM gateway — the one step a machine with no money and no gateway cannot run for you.
+
 ## 3. Production notes
 
 **The boot preflight ([`apps/api/src/core/preflight.ts`](apps/api/src/core/preflight.ts)) refuses to start on any

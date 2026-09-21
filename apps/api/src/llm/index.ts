@@ -1,11 +1,12 @@
-// Provider-agnostic router (anthropic | openai | openrouter | mock). SPEC §6, §8.1; AMENDMENTS §A.
+// Provider-agnostic router (anthropic | openai | openrouter | mock | x402). SPEC §6, §8.1; AMENDMENTS §A.
 import type { Config } from '../config.js';
 import type { LlmRouter } from '../core/interfaces.js';
 import type { Logger } from '../lib/log.js';
 import { createRouter } from './router.js';
+import type { SvmSignerResolver } from './providers/x402.js';
 
-export function createLlmRouter(config: Config, log: Logger): LlmRouter {
-  return createRouter({ config, log: log.child({ module: 'llm' }) });
+export function createLlmRouter(config: Config, log: Logger, resolveSigner?: SvmSignerResolver): LlmRouter {
+  return createRouter({ config, log: log.child({ module: 'llm' }), ...(resolveSigner ? { resolveSigner } : {}) });
 }
 
 export { buildCatalog, catalogEnv, cheapestOf, refreshOpenRouterPricing } from './catalog.js';

@@ -158,6 +158,32 @@ export function configContradictions(config: Config): PreflightProblem[] {
     });
   }
 
+  // 6b. x402 pays the gateway with USDC from each agent's own wallet, so a provider key would never be
+  //     used, and simulated wallets have nothing to pay with.
+  if (!demo && config.llm.provider === 'x402') {
+    const set = ([
+      ['ANTHROPIC_API_KEY', config.llm.anthropicApiKey],
+      ['OPENAI_API_KEY', config.llm.openaiApiKey],
+      ['OPENROUTER_API_KEY', config.llm.openrouterApiKey],
+    ] as const).filter(([, v]) => v !== null).map(([k]) => k);
+    if (set.length > 0) {
+      out.push({
+        id: 'llm.key-set-but-x402',
+        problem: `${set.join(', ')} ${set.length === 1 ? 'is' : 'are'} set, but LLM_PROVIDER=x402 pays the gateway `
+          + 'per call with USDC and never sends a provider key',
+        remedy: 'Remove the unused key, or set LLM_PROVIDER=router to call the provider with it instead.',
+      });
+    }
+    if (config.chain.mode !== 'solana') {
+      out.push({
+        id: 'llm.x402-without-solana',
+        problem: "LLM_PROVIDER=x402 pays for inference from each agent's own Solana wallet, but CHAIN_MODE=memory "
+          + 'means those wallets are simulated and no USDC can move',
+        remedy: 'Set CHAIN_MODE=solana and fund the agents to use x402, or LLM_PROVIDER=router/mock otherwise.',
+      });
+    }
+  }
+
   // 7. An RPC URL that names a different cluster than SOLANA_CLUSTER. The genesis probe below proves
   //    this properly, but the URL alone catches the copy-paste before a single packet leaves.
   if (config.chain.mode === 'solana') {

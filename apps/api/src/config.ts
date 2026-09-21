@@ -67,11 +67,15 @@ const envSchema = z.object({
   SOL_PRICE_USD: z.coerce.number().positive().default(150),
   ACCEPT_SOL_DEPOSITS: bool.default(true),
   ALLOW_MAINNET: bool.default(false),
-  LLM_PROVIDER: z.enum(['router', 'mock']).default('mock'),
+  LLM_PROVIDER: z.enum(['router', 'mock', 'x402']).default('mock'),
   ANTHROPIC_API_KEY: optional(z.string()),
   OPENAI_API_KEY: optional(z.string()),
   OPENROUTER_API_KEY: optional(z.string()),
   LLM_ALLOWED_MODELS: list.default([]),
+  // x402 mode: each agent pays an OpenAI-compatible x402 LLM gateway per call from its own Solana
+  // wallet (USDC, HTTP 402). No provider API key is used. X402_MAX_PRICE_USD caps one payment.
+  X402_GATEWAY_URL: optional(z.string().url()),
+  X402_MAX_PRICE_USD: z.coerce.number().positive().default(0.5),
   SEARCH_PROVIDER: z.enum(['brave', 'tavily', 'none']).default('none'),
   BRAVE_API_KEY: optional(z.string()),
   TAVILY_API_KEY: optional(z.string()),
@@ -128,6 +132,7 @@ export interface Config {
     openaiApiKey: string | null;
     openrouterApiKey: string | null;
     allowedModels: string[];        // empty = whole catalog
+    x402: { gatewayUrl: string; maxPriceMicro: number } | null;
   };
   search: { provider: Env['SEARCH_PROVIDER']; braveApiKey: string | null; tavilyApiKey: string | null };
   sandbox: { driver: Env['SANDBOX_DRIVER']; image: string; network: string; egressFiltered: boolean };
@@ -206,6 +211,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   if (e.LLM_PROVIDER === 'router' && !e.ANTHROPIC_API_KEY && !e.OPENAI_API_KEY && !e.OPENROUTER_API_KEY) {
     throw new ConfigError('LLM_PROVIDER=router needs at least one of ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY');
   }
+  if (e.LLM_PROVIDER === 'x402' && !e.X402_GATEWAY_URL) {
+    throw new ConfigError('LLM_PROVIDER=x402 needs X402_GATEWAY_URL: the OpenAI-compatible x402 LLM gateway each agent pays per call with USDC');
+  }
   if (e.SEARCH_PROVIDER === 'brave' && !e.BRAVE_API_KEY) throw new ConfigError('SEARCH_PROVIDER=brave needs BRAVE_API_KEY');
   if (e.SEARCH_PROVIDER === 'tavily' && !e.TAVILY_API_KEY) throw new ConfigError('SEARCH_PROVIDER=tavily needs TAVILY_API_KEY');
   if (e.DEMO && (e.CHAIN_MODE !== 'memory' || e.LLM_PROVIDER !== 'mock')) {
@@ -247,6 +255,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       openaiApiKey: e.OPENAI_API_KEY ?? null,
       openrouterApiKey: e.OPENROUTER_API_KEY ?? null,
       allowedModels: e.LLM_ALLOWED_MODELS,
+      x402: e.LLM_PROVIDER === 'x402' && e.X402_GATEWAY_URL
+        ? { gatewayUrl: stripSlash(e.X402_GATEWAY_URL), maxPriceMicro: usd(e.X402_MAX_PRICE_USD) }
+        : null,
     },
     search: { provider: e.SEARCH_PROVIDER, braveApiKey: e.BRAVE_API_KEY ?? null, tavilyApiKey: e.TAVILY_API_KEY ?? null },
     sandbox: {

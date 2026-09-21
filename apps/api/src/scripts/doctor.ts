@@ -565,6 +565,7 @@ function probeConfig(config: Config, provider: KeyedProvider, allowed: string[])
       openaiApiKey: provider === 'openai' ? config.llm.openaiApiKey : null,
       openrouterApiKey: provider === 'openrouter' ? config.llm.openrouterApiKey : null,
       allowedModels: allowed,
+      x402: null,
     },
   };
 }
@@ -734,6 +735,7 @@ function enabledModelIds(config: Config, working: readonly KeyedProvider[]): Set
       openaiApiKey: working.includes('openai') ? config.llm.openaiApiKey : null,
       openrouterApiKey: working.includes('openrouter') ? config.llm.openrouterApiKey : null,
       allowedModels: config.llm.allowedModels,
+      x402: null,
     },
   };
   try {

@@ -114,7 +114,8 @@ function disabledReason(m: ModelInfo, env: CatalogEnv, allowedIds: Set<string>):
   // Mock mode serves only mock models and ignores LLM_ALLOWED_MODELS so `pnpm demo` cannot be misconfigured.
   if (env.mode === 'mock') return m.provider === 'mock' ? null : 'LLM_PROVIDER=mock';
   if (m.provider === 'mock') return 'mock models are only served when LLM_PROVIDER=mock';
-  if (!env.keys[m.provider]) return `no ${KEY_ENV[m.provider]}`;
+  // x402 mode pays the gateway per call with USDC, so a model needs no provider key to be served.
+  if (env.mode !== 'x402' && !env.keys[m.provider]) return `no ${KEY_ENV[m.provider]}`;
   if (allowedIds.size > 0 && !allowedIds.has(m.id)) return 'not in LLM_ALLOWED_MODELS';
   return null;
 }

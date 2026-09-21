@@ -44,12 +44,15 @@ export interface LlmResponse {
   usage: LlmUsage;
   model: string;
   raw?: unknown;
+  // Set only by the x402 provider: the on-chain settlement of a per-call payment made from the
+  // agent's own wallet. The step books it as `inference_paid` (already settled, never swept).
+  payment?: { txSig: string; network: string; payTo: string | null; amountMicro: Micro };
 }
 // Providers never retry (the router owns that) and bound every call by
 // clamp(req.remainingMs ?? LLM_REQUEST_TIMEOUT_MS, LLM_REQUEST_TIMEOUT_MIN_MS, LLM_REQUEST_TIMEOUT_MS).
 export interface LlmProvider { readonly name: ModelInfo['provider']; complete(req: LlmRequest, model: ModelInfo): Promise<LlmResponse> }
 export interface LlmRouter {
-  readonly mode: 'router' | 'mock';
+  readonly mode: 'router' | 'mock' | 'x402';
   models(): ModelInfo[];                                   // enabled models only
   resolve(id: string): ModelInfo;                          // throws on unknown/disabled
   complete(req: LlmRequest): Promise<LlmResponse>;         // owns retries: 3× on 429/5xx/network, identical body

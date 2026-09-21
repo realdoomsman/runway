@@ -1,5 +1,8 @@
 // Composition root: builds every dependency from Config in dependency order and owns start/stop.
 import { createChain } from '../chain/index.js';
+import { createKeyPairSignerFromBytes } from '@solana/kit';
+import { withAgentSecret } from '../chain/keystore.js';
+import type { SvmSignerResolver } from '../llm/providers/x402.js';
 import type { Config } from '../config.js';
 import { assertSchema, createDb } from '../db/client.js';
 import { createServices, hostingLedgerHook, hostingRefund } from '../economy/index.js';
@@ -34,6 +37,12 @@ export interface ContainerOpts {
 export async function createContainer(config: Config, log: Logger, opts: ContainerOpts = {}): Promise<Container> {
   const dbHandle = createDb(config.databaseUrl);
   const clock: Clock = config.demo.enabled ? new FastClock() : systemClock;
+  // x402 inference (LLM_PROVIDER=x402): each agent pays the gateway from its OWN wallet, so the LLM
+  // router needs a signer bound to the agent. The key is decrypted transiently, per call, exactly
+  // like every other spend from an agent wallet — never cached, never logged.
+  const resolveSigner: SvmSignerResolver | undefined = config.llm.provider === 'x402'
+    ? (agentId) => withAgentSecret(dbHandle.db, config.keyEncryptionKey, agentId, (secret) => createKeyPairSignerFromBytes(secret))
+    : undefined;
   const core: CoreDeps = {
     config,
     db: dbHandle.db,
@@ -43,7 +52,7 @@ export async function createContainer(config: Config, log: Logger, opts: Contain
     chain: await createChain(config, log.child({ mod: 'chain' }), { clock }),
     sandbox: createSandbox(config, log.child({ mod: 'sandbox' })),
     search: createSearch(config, log.child({ mod: 'search' })),
-    llm: createLlmRouter(config, log.child({ mod: 'llm' })),
+    llm: createLlmRouter(config, log.child({ mod: 'llm' }), resolveSigner),
   };
   // `deps` is one object the late members are attached to; the ports below read it at call time,
   // so they see `services`/`runtime` once they exist.

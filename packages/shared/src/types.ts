@@ -13,7 +13,8 @@ export type AgentPhase =
 export type DeathCause = 'insolvent' | 'rent' | 'owner_terminated' | 'protocol_violation';
 export type LedgerKind =
   | 'funding'                        // money the buyer paid, moved into the agent's own wallet
-  | 'inference' | 'compute' | 'rent' | 'tool' | 'hosting' | 'gas'
+  | 'inference' | 'inference_paid'   // inference_paid: agent paid the LLM gateway directly on-chain (x402); settled, never swept
+  | 'compute' | 'rent' | 'tool' | 'hosting' | 'gas'
   | 'revenue_external' | 'revenue_internal' | 'revenue_pending' | 'payment' | 'escrow_out' | 'escrow_in'
   | 'withdrawal' | 'withdrawal_fee' | 'recapitalize' | 'royalty_in' | 'royalty_out' | 'settlement' | 'refund';
 export type EventKind =
@@ -41,7 +42,7 @@ export type StopReason =
 export type StepStatus = 'running' | 'ok' | 'error' | 'refused' | 'skipped' | 'aborted';
 export type BurnBasis = 'projected' | 'trailing';
 export type ChainMode = 'memory' | 'solana';
-export type LlmMode = 'router' | 'mock';
+export type LlmMode = 'router' | 'mock' | 'x402';
 export type SandboxName = 'docker' | 'local';
 // The treasury wallet's own ledger (table name `pool_txs` is kept). SPEC-V2 §2.6.
 export type TreasuryTxKind =

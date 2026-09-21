@@ -11,6 +11,7 @@ import { createAnthropicProvider } from './providers/anthropic.js';
 import { createMockProvider } from './providers/mock/index.js';
 import { createOpenAiProvider } from './providers/openai.js';
 import { createOpenRouterProvider } from './providers/openrouter.js';
+import { createX402Provider, type SvmSignerResolver } from './providers/x402.js';
 
 export const LLM_MAX_ATTEMPTS = 3;
 export const LLM_RETRY_BASE_MS = 500;
@@ -20,6 +21,8 @@ export interface RouterOpts {
   config: Config;
   log: Logger;
   providers?: Partial<Record<ModelProvider, LlmProvider>>;              // test seam
+  x402Provider?: LlmProvider;                                          // test seam for x402 mode
+  resolveSigner?: SvmSignerResolver;                                   // per-agent Solana signer, x402 mode only
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   fetchImpl?: typeof fetch;
 }
@@ -33,7 +36,21 @@ export function createRouter(opts: RouterOpts): LlmRouter {
   const enabled = (): ModelInfo[] => catalog.models.filter((m) => m.enabled);
   log.info({ models: enabled().map((m) => m.id), disabled: Object.fromEntries(catalog.disabled) }, 'llm catalog ready');
 
+  let x402Provider: LlmProvider | undefined;
+  // x402 mode routes EVERY model through one provider that pays the gateway per call from the agent's
+  // own wallet; there is no per-provider key to select on. Built once, then cached.
+  function x402(): LlmProvider {
+    if (x402Provider) return x402Provider;
+    if (opts.x402Provider) return (x402Provider = opts.x402Provider);
+    const cfg = config.llm.x402;
+    if (!cfg) throw internal('LLM_PROVIDER=x402 but X402_GATEWAY_URL produced no config');
+    if (!opts.resolveSigner) throw internal('LLM_PROVIDER=x402 requires a per-agent signer resolver');
+    x402Provider = createX402Provider({ gatewayUrl: cfg.gatewayUrl, maxPriceMicro: cfg.maxPriceMicro, resolveSigner: opts.resolveSigner, log });
+    return x402Provider;
+  }
+
   function providerFor(model: ModelInfo): LlmProvider {
+    if (config.llm.provider === 'x402') return x402();
     const cached = cache.get(model.provider);
     if (cached) return cached;
     const created = opts.providers?.[model.provider] ?? construct(model.provider, config);

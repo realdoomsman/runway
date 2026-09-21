@@ -161,6 +161,9 @@ function aggregatePatch(row: AgentRow, e: LedgerInput): Partial<AgentRow> {
     case 'recapitalize': return { recapitalizedMicro: row.recapitalizedMicro + abs };
     case 'royalty_in': return { royaltyInMicro: row.royaltyInMicro + abs };
     case 'royalty_out': return { royaltyOutMicro: row.royaltyOutMicro + abs };
+    // x402: the agent already paid the gateway on-chain, so it counts as inference spend but is NOT
+    // owed to the protocol — it never touches unsettled_micro and is settled on arrival.
+    case 'inference_paid': return { spendInferenceMicro: row.spendInferenceMicro + abs };
     // Protocol spend is handled above; these carry no aggregate of their own.
     case 'inference': case 'compute': case 'rent': case 'tool': case 'hosting': case 'gas':
     case 'withdrawal_fee': case 'settlement': return {};
