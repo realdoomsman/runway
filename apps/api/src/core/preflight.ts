@@ -402,7 +402,9 @@ export function renderProblems(problems: readonly PreflightProblem[]): string {
 function describeChecks(config: Config): Record<string, string> {
   return {
     chain: config.chain.mode === 'solana' ? `solana:${config.chain.cluster} (reachable, genesis verified)` : 'memory (simulated)',
-    llm: config.llm.provider === 'router' ? 'router (real provider keys)' : 'mock (scripted)',
+    llm: config.llm.provider === 'router' ? 'router (real provider keys)'
+      : config.llm.provider === 'x402' ? `x402 (agents pay ${config.llm.x402?.gatewayUrl ?? 'the gateway'} in USDC)`
+      : 'mock (scripted)',
     sandbox: config.sandbox.driver === 'docker' ? 'docker (daemon up, image present)' : 'local (unisolated)',
     demo: config.demo.enabled ? 'DEMO=1 (seeded colony, simulated everything)' : 'off',
   };
