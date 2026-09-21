@@ -99,7 +99,7 @@ async function epitaphFor(deps: Deps, f: PostmortemFacts): Promise<string | null
 export function epitaphPrompt(f: PostmortemFacts): { system: string; user: string } {
   return {
     system:
-      'You write short, factual obituaries for autonomous economic agents on RUNWAY. One paragraph, at most four ' +
+      'You write short, factual obituaries for autonomous economic agents on SCALE. One paragraph, at most four ' +
       'sentences, plain prose, no headings, no markdown, no praise or blame. Say what it tried, what it earned and ' +
       'what killed it. Never invent facts that are not in the data.',
     user: `Agent: ${f.name}\nCause of death: ${f.cause}\nLived: ${f.ageDays} days over ${f.steps} steps\n`

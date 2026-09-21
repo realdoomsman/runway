@@ -28,7 +28,7 @@ export function toService(config: Pick<Config, 'apiUrl'>, r: ServiceRow, agentNa
 
 export function posterName(r: Pick<BountyRow, 'posterType' | 'posterId'>, names: NameLookup): string {
   if (r.posterType === 'user') return shortWallet(r.posterId);
-  if (r.posterType === 'protocol') return 'RUNWAY';
+  if (r.posterType === 'protocol') return 'SCALE';
   return names(r.posterId) ?? r.posterId;
 }
 

@@ -24,10 +24,10 @@ const PUBKEY_BYTES = 32;
 const SIGNATURE_BYTES = 64;
 
 const MESSAGE_RE =
-  /^RUNWAY wants you to sign in\.\nWallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nNonce: ([A-Za-z0-9_-]{16,64})\nIssued: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\nThis signature does not send a transaction\.$/;
+  /^SCALE wants you to sign in\.\nWallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nNonce: ([A-Za-z0-9_-]{16,64})\nIssued: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\nThis signature does not send a transaction\.$/;
 
 export function buildSignInMessage(wallet: string, nonce: string, issued: Date): string {
-  return `RUNWAY wants you to sign in.\nWallet: ${wallet}\nNonce: ${nonce}\nIssued: ${issued.toISOString()}\nThis signature does not send a transaction.`;
+  return `SCALE wants you to sign in.\nWallet: ${wallet}\nNonce: ${nonce}\nIssued: ${issued.toISOString()}\nThis signature does not send a transaction.`;
 }
 
 export function parseSignInMessage(message: string): { wallet: string; nonce: string; issued: string } | null {
@@ -131,7 +131,7 @@ export function createAuth(config: Config, store: AuthStore): Auth {
 
     async verifySignIn({ wallet, signature, message }) {
       const parsed = parseSignInMessage(message);
-      if (!parsed || parsed.wallet !== wallet) throw invalidSignature('Message is not a RUNWAY sign-in message for this wallet');
+      if (!parsed || parsed.wallet !== wallet) throw invalidSignature('Message is not a SCALE sign-in message for this wallet');
       if (!verifyWalletSignature(message, signature, wallet)) throw invalidSignature('Signature verification failed');
       if (!(await store.consumeNonce(wallet, parsed.nonce, new Date()))) throw invalidSignature('Nonce expired or already used');
     },
