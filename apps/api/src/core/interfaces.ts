@@ -78,6 +78,10 @@ export interface ChainAdapter {
   getUsdcTransfer(sig: string): Promise<UsdcTransfer | null>;           // verifies user-submitted payment/escrow txs
   ensureAta(payerSecret: Uint8Array, owner: string): Promise<void>;
   solPriceUsd(): Promise<number>;
+  /** Swap `amountBaseUnits` of inputMint into outputMint from `fromSecret`'s wallet (Jupiter). Agent pays gas. */
+  swap(fromSecret: Uint8Array, inputMint: string, outputMint: string, amountBaseUnits: number, slippageBps: number): Promise<{ sig: string; inAmount: number; outAmount: number }>;
+  /** USDC micro that selling `amountBaseUnits` of `mint` would yield now — marks open positions to market. */
+  quoteUsdcOut(mint: string, amountBaseUnits: number): Promise<Micro>;
   /** One transaction: `payerSecret` pays fees and creates missing ATAs; `fromSecret` signs the transfers. */
   sweepUsdc(fromSecret: Uint8Array, payerSecret: Uint8Array, outs: SweepOut[], memo?: string): Promise<{ sig: string }>;
   /** Moves `lamports` (or the whole balance when null) out of `fromSecret`; `payerSecret` pays fees. */

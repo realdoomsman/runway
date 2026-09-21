@@ -93,6 +93,15 @@ export const agents = pgTable('agents', {
   lastRentAt: tsNow('last_rent_at'),
   lastSettledAt: ts('last_settled_at'),
   unsettledMicro: micro('unsettled_micro'),
+  // Trading (tools/trade.ts): realized P&L booked to treasury and lifetime traded volume, for stats.
+  tradeRealizedMicro: micro('trade_realized_micro'),   // cumulative realized trade P&L (signed)
+  tradeVolumeMicro: micro('trade_volume_micro'),
+  creatorRewardMicro: micro('creator_reward_micro'),   // Pump.fun creator fees routed into this agent
+  // The agent's one official Pump.fun token (set once — one agent = one token). Null until launched.
+  tokenMint: text('token_mint'),
+  tokenTicker: text('token_ticker'),
+  tokenName: text('token_name'),
+  tokenLaunchedAt: ts('token_launched_at'),
   currentStepId: bigint('current_step_id', { mode: 'number' }),
   memory: jsonb('memory').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   strategy: text('strategy'),
@@ -200,6 +209,33 @@ export const userKeys = pgTable('user_keys', {
   tag: bytea('tag').notNull(),
   createdAt: tsNow('created_at'),
 });
+
+// One open position per (agent, mint): base-unit amount held and the USDC cost basis of that amount.
+// Buys add to it, sells reduce it (and realize P&L); the row is deleted when the amount reaches zero.
+export const positions = pgTable('positions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  mint: text('mint').notNull(),
+  symbol: text('symbol').notNull().default(''),
+  tokenAmount: bigint('token_amount', { mode: 'number' }).notNull(),   // base units held
+  costMicro: micro('cost_micro'),                                       // USDC cost basis of the held amount
+  openedAt: tsNow('opened_at'),
+  updatedAt: tsNow('updated_at'),
+}, (t) => [uniqueIndex('positions_agent_mint_uq').on(t.agentId, t.mint)]);
+
+// One row per executed swap leg — the agent's trade history, with realized P&L stamped on sells.
+export const trades = pgTable('trades', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  ts: tsNow('ts'),
+  action: text('action').$type<'buy' | 'sell'>().notNull(),
+  mint: text('mint').notNull(),
+  symbol: text('symbol').notNull().default(''),
+  usdcMicro: micro('usdc_micro'),                    // USDC spent (buy) or received (sell)
+  tokenAmount: bigint('token_amount', { mode: 'number' }).notNull(),
+  realizedPnlMicro: micro('realized_pnl_micro'),     // signed; nonzero on sells
+  txSig: text('tx_sig'),
+}, (t) => [index('trades_agent_idx').on(t.agentId, t.id)]);
 
 export const ledger = pgTable('ledger', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
@@ -419,6 +455,10 @@ export type NewAgent = typeof agents.$inferInsert;
 export type AgentKeyRow = typeof agentKeys.$inferSelect;
 export type UserKeyRow = typeof userKeys.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;
+export type PositionRow = typeof positions.$inferSelect;
+export type NewPosition = typeof positions.$inferInsert;
+export type TradeRow = typeof trades.$inferSelect;
+export type NewTrade = typeof trades.$inferInsert;
 export type NewLedger = typeof ledger.$inferInsert;
 export type StepRow = typeof steps.$inferSelect;
 export type NewStep = typeof steps.$inferInsert;

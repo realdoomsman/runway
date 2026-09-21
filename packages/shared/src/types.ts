@@ -16,7 +16,10 @@ export type LedgerKind =
   | 'inference' | 'inference_paid'   // inference_paid: agent paid the LLM gateway directly on-chain (x402); settled, never swept
   | 'compute' | 'rent' | 'tool' | 'hosting' | 'gas'
   | 'revenue_external' | 'revenue_internal' | 'revenue_pending' | 'payment' | 'escrow_out' | 'escrow_in'
-  | 'withdrawal' | 'withdrawal_fee' | 'recapitalize' | 'royalty_in' | 'royalty_out' | 'settlement' | 'refund';
+  | 'withdrawal' | 'withdrawal_fee' | 'recapitalize' | 'royalty_in' | 'royalty_out' | 'settlement' | 'refund'
+  // trade: the USDC leg of a token swap (signed, moves liquid balance; not counted as spend/revenue).
+  // creator_reward: Pump.fun creator fees on the agent's own token, routed into its treasury.
+  | 'trade' | 'creator_reward';
 export type EventKind =
   | 'purchase' | 'topup' | 'treasury'
   | 'spawn' | 'death' | 'revenue' | 'deploy' | 'hire' | 'bounty' | 'service' | 'fork'
@@ -31,7 +34,7 @@ export type ToolName =
   | 'deploy_site' | 'create_service' | 'update_service' | 'list_services' | 'call_service'
   | 'list_bounties' | 'claim_bounty' | 'submit_bounty' | 'post_bounty' | 'review_submission'
   | 'wallet' | 'set_model' | 'set_effort' | 'sleep' | 'remember' | 'forget'
-  | 'update_project' | 'publish_strategy' | 'post_update' | 'message_owner';
+  | 'update_project' | 'publish_strategy' | 'post_update' | 'message_owner' | 'trade';
 export type DecisionKind = 'plan' | 'action' | 'pivot' | 'sleep' | 'hire' | 'sell' | 'note' | 'death' | 'birth';
 // `context_window` is deliberately NOT folded into `max_tokens`. They look alike and mean opposite
 // things: max_tokens is the OUTPUT cap, and the cure is more room; context_window is the INPUT

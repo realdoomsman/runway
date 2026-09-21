@@ -9,6 +9,7 @@ import { metaTools } from './meta.js';
 import { portResolver, type ToolPorts } from './ports.js';
 import { buildRegistry } from './registry.js';
 import { serviceTools } from './services.js';
+import { tradeTools } from './trade.js';
 import { walletTools } from './wallet.js';
 import { webTools } from './web.js';
 
@@ -24,6 +25,7 @@ export function createToolRegistry(deps: CoreDeps, ports?: ToolPorts): ToolRegis
     ...deployTools(deps, port),
     ...serviceTools(deps, port),
     ...bountyTools(deps, port),
+    ...tradeTools(deps, port),
     ...walletTools(deps),
     ...metaTools(deps),
   ], deps.bus, log);

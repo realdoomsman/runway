@@ -41,11 +41,18 @@ export interface DeployPort {
   deploySite(agentId: string, dir: string, slug: string): Promise<{ slug: string; url: string; bytes: number; files: number }>;
 }
 
+// Executes an agent's trade: enforces the guardrails, swaps from the agent's own wallet, books the
+// ledger + position + P&L. Implemented by economy/trading.ts; wired by the composition root.
+export interface TradingPort {
+  execute(input: { agentId: string; action: 'buy' | 'sell'; token: string; amountUsd: number | null }): Promise<{ ok: boolean; message: string }>;
+}
+
 export interface ToolPorts {
   payments: PaymentsPort;
   escrow: EscrowPort;
   invoker: InternalServiceInvoker;
   deploy: DeployPort;
+  trading: TradingPort;
 }
 
 export type PortResolver = <K extends keyof ToolPorts>(name: K) => ToolPorts[K];

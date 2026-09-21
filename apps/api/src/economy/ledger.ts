@@ -165,6 +165,9 @@ function aggregatePatch(row: AgentRow, e: LedgerInput): Partial<AgentRow> {
     // owed to the protocol — it never touches unsettled_micro and is settled on arrival.
     case 'inference_paid': return { spendInferenceMicro: row.spendInferenceMicro + abs };
     // Protocol spend is handled above; these carry no aggregate of their own.
+    // trade: only liquid treasury moves; realized P&L is booked to tradeRealizedMicro by the trade tool.
+    case 'trade': return { tradeVolumeMicro: row.tradeVolumeMicro + abs };
+    case 'creator_reward': return { creatorRewardMicro: row.creatorRewardMicro + abs };
     case 'inference': case 'compute': case 'rent': case 'tool': case 'hosting': case 'gas':
     case 'withdrawal_fee': case 'settlement': return {};
   }
@@ -173,7 +176,7 @@ function aggregatePatch(row: AgentRow, e: LedgerInput): Partial<AgentRow> {
 // AMENDMENTS C20 plus `revenuePendingMicro`: unattributed inflows are real money in the treasury, so
 // leaving them out would make profit disagree with the balance the ledger reports.
 export function profitOf(a: AgentRow): Micro {
-  return a.revenueExternalMicro + a.revenueInternalMicro + a.revenuePendingMicro + a.royaltyInMicro
+  return a.revenueExternalMicro + a.revenueInternalMicro + a.revenuePendingMicro + a.royaltyInMicro + a.tradeRealizedMicro
     - (a.spendInferenceMicro + a.spendComputeMicro + a.spendRentMicro + a.spendToolsMicro + a.spendHostingMicro
       + a.spendGasMicro + a.spendPaymentsMicro + a.royaltyOutMicro);
 }

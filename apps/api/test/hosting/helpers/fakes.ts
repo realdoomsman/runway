@@ -129,5 +129,7 @@ export function createFakeChain(): FakeChain {
     sweepUsdc: unused('sweepUsdc'),
     sweepSol: unused('sweepSol'),
     solPriceUsd: unused('solPriceUsd'),
+    swap: unused('swap'),
+    quoteUsdcOut: unused('quoteUsdcOut'),
   } as FakeChain;
 }

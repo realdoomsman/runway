@@ -7,7 +7,7 @@ import {
 } from '@solana/spl-token';
 import {
   Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionExpiredBlockheightExceededError,
-  TransactionInstruction,
+  TransactionInstruction, VersionedTransaction,
   type ConfirmedSignatureInfo, type ParsedAccountData,
 } from '@solana/web3.js';
 import type { Config } from '../config.js';
@@ -301,11 +301,55 @@ export function createSolanaChain(config: Config, log: Logger): WalletAwareChain
       if (await rpc('getAccountInfo', () => connection.getAccountInfo(ata, 'confirmed'))) return;
       await send(payer, [createAssociatedTokenAccountIdempotentInstruction(payer.publicKey, ata, publicKey(owner), mint)]);
     },
+    // Swap `amountBaseUnits` of inputMint into outputMint from the agent's own wallet via Jupiter. The
+    // agent signs and pays gas (it must hold a little SOL). Slippage is capped; a missing route throws.
+    async swap(fromSecret, inputMint, outputMint, amountBaseUnits, slippageBps) {
+      assertAmount(amountBaseUnits);
+      const kp = keypairFromSecret(fromSecret);
+      const quote = await jupFetch(`${JUP_HOST}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountBaseUnits}&slippageBps=${slippageBps}&restrictIntermediateTokens=true`);
+      if (!quote || quote.outAmount === undefined) throw new ChainError('tx_failed', 'no swap route for that pair/size');
+      const swapRes = await jupFetch(`${JUP_HOST}/swap`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ quoteResponse: quote, userPublicKey: kp.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true, prioritizationFeeLamports: 'auto' }),
+      });
+      if (!swapRes?.swapTransaction) throw new ChainError('tx_failed', 'Jupiter returned no transaction');
+      const tx = VersionedTransaction.deserialize(Buffer.from(swapRes.swapTransaction, 'base64'));
+      tx.sign([kp]);
+      let sig: string;
+      try {
+        sig = await connection.sendRawTransaction(tx.serialize(), { maxRetries: 5, preflightCommitment: 'confirmed' });
+        const conf = await connection.confirmTransaction(sig, 'confirmed');
+        if (conf.value.err) throw new Error(JSON.stringify(conf.value.err));
+      } catch (e) {
+        throw new ChainError('tx_failed', `swap failed: ${errorMessage(e)}`, { cause: e });
+      }
+      return { sig, inAmount: Number(quote.inAmount), outAmount: Number(quote.outAmount) };
+    },
+    // Current USDC value (in micro) of holding `amountBaseUnits` of `mint`, i.e. what selling it now
+    // would yield. Used to mark open positions to market for unrealized P&L. Zero when no route.
+    async quoteUsdcOut(mint, amountBaseUnits) {
+      if (mint === usdcMint) return amountBaseUnits;
+      if (!Number.isSafeInteger(amountBaseUnits) || amountBaseUnits <= 0) return 0;
+      try {
+        const q = await jupFetch(`${JUP_HOST}/quote?inputMint=${mint}&outputMint=${usdcMint}&amount=${amountBaseUnits}&slippageBps=100&restrictIntermediateTokens=true`);
+        return q && q.outAmount !== undefined ? Number(q.outAmount) : 0;
+      } catch {
+        return 0;
+      }
+    },
     solPriceUsd: () => price.get(),
   };
 }
 
 const nap = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+// Jupiter's public lite host — used for the token swap and for marking positions to market (quote).
+export const JUP_HOST = 'https://lite-api.jup.ag/swap/v1';
+async function jupFetch(url: string, init?: RequestInit): Promise<any> {
+  const res = await fetch(url, init);
+  if (!res.ok) throw new ChainError('rpc_error', `Jupiter ${res.status} ${await res.text().catch(() => '')}`.slice(0, 200));
+  return res.json();
+}
 
 // What a public RPC endpoint answers with when it is busy, restarting or behind a flaky socket —
 // never a statement about the chain, always worth one more attempt.

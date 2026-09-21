@@ -66,6 +66,13 @@ const envSchema = z.object({
   ESCROW_WALLET_SECRET: optional(z.string()),
   SOL_PRICE_USD: z.coerce.number().positive().default(150),
   ACCEPT_SOL_DEPOSITS: bool.default(true),
+  // Autonomous trading (all limits enforced in tools/trade.ts; the model is never trusted with them).
+  TRADE_ENABLED: bool.default(false),
+  TRADE_ALLOWED_MINTS: list.default([]),                 // token mints an agent may buy; empty = nothing tradeable
+  TRADE_MAX_POSITION_USD: z.coerce.number().positive().default(5),
+  TRADE_MAX_DAILY_LOSS_USD: z.coerce.number().positive().default(5),
+  TRADE_MIN_RESERVE_USD: z.coerce.number().min(0).default(2),
+  TRADE_SLIPPAGE_BPS: z.coerce.number().int().min(1).max(2000).default(150),
   ALLOW_MAINNET: bool.default(false),
   LLM_PROVIDER: z.enum(['router', 'mock', 'x402']).default('mock'),
   ANTHROPIC_API_KEY: optional(z.string()),
@@ -128,6 +135,14 @@ export interface Config {
     escrowWalletSecret: string | null;    // never log
     solPriceUsd: number;
     acceptSolDeposits: boolean;
+  };
+  trading: {
+    enabled: boolean;
+    allowedMints: string[];              // token mints agents may trade into (USDC is always the quote leg)
+    maxPositionMicro: number;            // cap on one position's cost basis
+    maxDailyLossMicro: number;           // realized loss over 24h that halts trading
+    minReserveMicro: number;             // liquid USDC an agent must keep; a trade may never dip below it
+    slippageBps: number;
   };
   llm: {
     provider: Env['LLM_PROVIDER'];
@@ -252,6 +267,14 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       escrowWalletSecret: e.ESCROW_WALLET_SECRET ?? null,
       solPriceUsd: e.SOL_PRICE_USD,
       acceptSolDeposits: e.ACCEPT_SOL_DEPOSITS,
+    },
+    trading: {
+      enabled: e.TRADE_ENABLED,
+      allowedMints: e.TRADE_ALLOWED_MINTS,
+      maxPositionMicro: usd(e.TRADE_MAX_POSITION_USD),
+      maxDailyLossMicro: usd(e.TRADE_MAX_DAILY_LOSS_USD),
+      minReserveMicro: usd(e.TRADE_MIN_RESERVE_USD),
+      slippageBps: e.TRADE_SLIPPAGE_BPS,
     },
     llm: {
       provider: e.LLM_PROVIDER,

@@ -161,6 +161,8 @@ export function fakeChain(balances: Record<string, { usdc: Micro; sol: number }>
     sweepUsdc: () => Promise.resolve({ sig: 'sig_sweep' }),
     sweepSol: () => Promise.resolve({ sig: 'sig_sweep_sol' }),
     solPriceUsd: () => Promise.resolve(150),
+    swap: () => Promise.resolve({ sig: 'sig_swap', inAmount: 0, outAmount: 0 }),
+    quoteUsdcOut: () => Promise.resolve(0),
   };
 }
 
@@ -208,6 +210,7 @@ export function fakePorts(): FakePorts {
         return Promise.resolve({ slug, url: `http://localhost:8787/sites/${slug}/`, bytes: 2048, files: 3 });
       },
     },
+    trading: { execute: () => Promise.resolve({ ok: true, message: 'traded' }) },
   };
 }
 

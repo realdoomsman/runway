@@ -25,6 +25,7 @@ export interface MemoryChain extends WalletAwareChain {
   faucet(to: string, amount: Micro, from: string): Promise<{ sig: string }>;  // external "customer" USDC
   faucetSol(to: string, lamports: number): Promise<{ sig: string }>;
   setTokenBalance(owner: string, mint: string, baseUnits: number): void;      // arbitrary SPL fixtures
+  setTokenPrice(mint: string, usdPerToken: number): void;                     // memory-only price control for tests
   useClock(clock: Clock): void;                                               // demo: stamp txs with virtual time
 }
 
@@ -41,6 +42,14 @@ export function createMemoryChain(config: Config, log: Logger, opts: { clock?: C
 
   const newSig = (): string => `sim${bs58.encode(randomBytes(16))}`;
   const balance = (map: Map<string, number>, key: string): number => map.get(key) ?? 0;
+  const tokenPrices = new Map<string, number>();          // memory only: mint -> USD per whole token (6-decimal tokens)
+  const tokenBal = (mint: string, owner: string): number => tokens.get(mint)?.get(owner) ?? 0;
+  const setTok = (mint: string, owner: string, v: number): void => {
+    const m = tokens.get(mint) ?? new Map<string, number>();
+    m.set(owner, v);
+    tokens.set(mint, m);
+  };
+  const priceOf = (mint: string): number => tokenPrices.get(mint) ?? 1;
 
   function record(kind: MemTx['kind'], from: string, to: string, amount: number, memo: string | null, sig = newSig()): MemTx {
     const tx: MemTx = { index: txs.length, sig, kind, from, to, amount, memo, ts: clock.now() };
@@ -127,6 +136,33 @@ export function createMemoryChain(config: Config, log: Logger, opts: { clock?: C
       if (amount <= 0) throw new ChainError('insufficient_funds', `${from} has no lamports to sweep`);
       return { sig: move(sol, 'sol', fromSecret, to, amount, null).sig };
     },
+    // Simulated Jupiter swap: USDC<->token at the memory price (6-decimal tokens); marks the two balances.
+    async swap(fromSecret, inputMint, outputMint, amountBaseUnits, _slippageBps) {
+      assertAmount(amountBaseUnits);
+      const from = pubkeyOfSecret(fromSecret);
+      if (inputMint === usdcMint && outputMint !== usdcMint) {
+        const have = balance(usdc, from);
+        if (have < amountBaseUnits) throw new ChainError('insufficient_funds', `${from} has ${have} micro USDC, needs ${amountBaseUnits}`);
+        usdc.set(from, have - amountBaseUnits);
+        const out = Math.round(amountBaseUnits / priceOf(outputMint));
+        setTok(outputMint, from, tokenBal(outputMint, from) + out);
+        return { sig: newSig(), inAmount: amountBaseUnits, outAmount: out };
+      }
+      if (outputMint === usdcMint && inputMint !== usdcMint) {
+        const have = tokenBal(inputMint, from);
+        if (have < amountBaseUnits) throw new ChainError('insufficient_funds', `${from} holds ${have} of ${inputMint}, needs ${amountBaseUnits}`);
+        setTok(inputMint, from, have - amountBaseUnits);
+        const out = Math.round(amountBaseUnits * priceOf(inputMint));
+        usdc.set(from, balance(usdc, from) + out);
+        return { sig: newSig(), inAmount: amountBaseUnits, outAmount: out };
+      }
+      throw new ChainError('invalid_amount', 'memory swap supports only USDC<->token');
+    },
+    async quoteUsdcOut(mint, amountBaseUnits) {
+      if (mint === usdcMint) return amountBaseUnits;
+      if (!Number.isSafeInteger(amountBaseUnits) || amountBaseUnits <= 0) return 0;
+      return Math.round(amountBaseUnits * priceOf(mint));
+    },
     async listUsdcInflows(pubkey, sinceSig, limit) { return listUsdcInflows(pubkey, sinceSig, limit); },
     async getUsdcTransfer(sig) {
       const tx = bySig.get(sig);
@@ -145,6 +181,7 @@ export function createMemoryChain(config: Config, log: Logger, opts: { clock?: C
       holders.set(owner, baseUnits);
       tokens.set(mint, holders);
     },
+    setTokenPrice(mint, usdPerToken) { tokenPrices.set(mint, usdPerToken); },
     useClock(next) { clock = next; },
   };
 }

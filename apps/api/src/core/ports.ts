@@ -2,6 +2,7 @@
 // so the four capabilities it needs are supplied here, where every module already exists.
 import { escrowPort, hostingLedgerHook, paymentsPort } from '../economy/ports.js';
 import { createServiceStore, deployPort, serviceInvoker } from '../hosting/index.js';
+import { tradingPort } from '../economy/trading.js';
 import { notFound } from '../lib/errors.js';
 import type { InternalServiceInvoker, ToolPorts } from '../tools/index.js';
 import type { Deps } from './interfaces.js';
@@ -12,6 +13,7 @@ export function toolPorts(deps: Deps): ToolPorts {
     escrow: escrowPort(deps),
     deploy: deployPort(deps),
     invoker: internalInvoker(deps),
+    trading: tradingPort(deps),
   };
 }
 
