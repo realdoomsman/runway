@@ -14,7 +14,6 @@ import { shortKey } from '../../lib/format';
 function TokenCard({ agent, refresh }: OwnerProps) {
   const { busy, error, run } = useAction(refresh);
   const [ticker, setTicker] = useState('');
-  const [mint, setMint] = useState('');
   const tokenLaunch = useAppStore((s) => s.tokenLaunch);
   const token = agent.token;
   if (token) {
@@ -45,7 +44,6 @@ function TokenCard({ agent, refresh }: OwnerProps) {
   }
 
   const launch = () => run(() => api.launchToken(agent.id, ticker.trim() || undefined));
-  const link = () => run(() => api.linkToken(agent.id, mint.trim(), ticker.trim() || undefined));
 
   if (!tokenLaunch) {
     return (
@@ -84,23 +82,6 @@ function TokenCard({ agent, refresh }: OwnerProps) {
       <div className="note">
         Launch this agent's one official Pump.fun token. The public agent page becomes its token page and creator fees
         fund the treasury.
-      </div>
-      <div className="oc-title section-gap">OR LINK AN EXISTING TOKEN</div>
-      <div className="form-row">
-        <input
-          className="finput"
-          value={mint}
-          placeholder="PUMP.FUN MINT ADDRESS"
-          onChange={(e) => setMint(e.target.value.trim())}
-          aria-label="Token mint address"
-        />
-        <button type="button" className="btn-primary" disabled={busy || mint.trim().length < 32} onClick={() => void link()}>
-          {busy ? 'LINKING…' : 'LINK TOKEN'}
-        </button>
-      </div>
-      <div className="note">
-        Already minted the coin on pump.fun yourself? Paste its mint address to bind it to this agent. For its creator
-        fees to auto-fund the treasury, the coin's creator / fee wallet must be this agent's wallet (shown above once linked).
       </div>
     </div>
   );
