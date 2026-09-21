@@ -6,9 +6,7 @@
 // purpose, public page). No coin is ever created unless an owner explicitly calls launchAgentToken AND
 // token launches are enabled on the deployment (config.token.launchEnabled).
 import { eq, isNotNull } from 'drizzle-orm';
-import { Connection, Keypair, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { PumpSdk, feeSharingConfigPda } from '@pump-fun/pump-sdk';
+import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
 import { type AgentTokenInfo, type TreasurySplit } from '@runway/shared';
 import { keypairFromSecret } from '../chain/keys.js';
 import { withAgentSecret } from '../chain/keystore.js';
@@ -24,7 +22,6 @@ const TICKER_RE = /^[A-Z0-9]{2,10}$/;
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const CLAIM_GAS_KEEP_LAMPORTS = 6_000_000;   // ~0.006 SOL the agent keeps for its own gas
 const MIN_CLAIM_LAMPORTS = 2_000_000;        // don't bother converting a claim smaller than ~0.002 SOL
-const pumpSdk = new PumpSdk();   // offline instruction builder for Pump.fun creator-fee sharing
 
 export const pumpUrl = (mint: string): string => `https://pump.fun/${mint}`;
 const defaultTicker = (name: string): string => (name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) || 'AGENT');
@@ -90,39 +87,6 @@ export async function launchAgentToken(deps: CoreDeps, agentId: string, ownerId:
   return { mint: mintStr, name: agent.name, ticker, launchedAt: now.toISOString(), pumpUrl: pumpUrl(mintStr) };
 }
 
-// Pull the agent's pending Pump.fun creator fees into its OWN wallet, signed by the agent. Modern
-// coins have a `sharing_config` PDA (creator fees are split among shareholders by basis points): those
-// are claimed with the permissionless `distribute_creator_fees_v2`, which pays the creator vault out to
-// every shareholder. Legacy single-recipient coins fall back to `collect_creator_fee` via PumpPortal.
-async function claimPumpFees(conn: Connection, agentKp: Keypair, mintStr: string): Promise<void> {
-  const mint = new PublicKey(mintStr);
-  const sharingConfigAddress = feeSharingConfigPda(mint);
-  const info = await conn.getAccountInfo(sharingConfigAddress, 'confirmed');
-  if (info) {
-    const sharingConfig = pumpSdk.decodeSharingConfig(info);
-    const ix = await pumpSdk.distributeCreatorFeesV2({
-      mint, sharingConfig, sharingConfigAddress,
-      quoteMint: NATIVE_MINT, payer: agentKp.publicKey, shouldInitializeAta: true, quoteTokenProgram: TOKEN_PROGRAM_ID,
-    });
-    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
-    const msg = new TransactionMessage({ payerKey: agentKp.publicKey, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message();
-    const tx = new VersionedTransaction(msg);
-    tx.sign([agentKp]);
-    const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
-    await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-    return;
-  }
-  const resp = await fetch(PUMPPORTAL_LOCAL, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ publicKey: agentKp.publicKey.toBase58(), action: 'collectCreatorFee', priorityFee: 0.0005 }),
-  });
-  if (!resp.ok) throw new Error(`creator-fee claim build failed (${resp.status})`);
-  const tx = VersionedTransaction.deserialize(new Uint8Array(await resp.arrayBuffer()));
-  tx.sign([agentKp]);
-  const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
-  await conn.confirmTransaction(sig, 'confirmed');
-}
-
 // Claims the agent's accumulated Pump.fun creator fees (paid in SOL) into its own wallet, converts the
 // proceeds to USDC and books them into the treasury as `creator_reward`. Signed by the agent (the
 // creator). Returns how much USDC was booked. Run by the periodic `creator_fees` job.
@@ -131,12 +95,24 @@ export async function claimCreatorFees(deps: CoreDeps, agentId: string): Promise
   if (!agent?.tokenMint) return { ok: false, bookedMicro: 0 };
   const conn = new Connection(deps.config.chain.rpcUrl, 'confirmed');
   try {
-    await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, (secret) =>
-      claimPumpFees(conn, keypairFromSecret(secret), agent.tokenMint!));
-    // Fees land as SOL in the agent's OWN wallet. Convert everything above the gas reserve to USDC and
-    // book it as the agent's revenue, so its treasury reflects the fees its token earned.
+    const solBefore = await deps.chain.getSolBalance(agent.walletPubkey);
+    await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, async (secret) => {
+      const agentKp = keypairFromSecret(secret);
+      const built = await fetch(PUMPPORTAL_LOCAL, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ publicKey: agentKp.publicKey.toBase58(), action: 'collectCreatorFee', priorityFee: 0.0005 }),
+      });
+      if (!built.ok) throw new Error(`claim build failed (${built.status})`);
+      const tx = VersionedTransaction.deserialize(new Uint8Array(await built.arrayBuffer()));
+      tx.sign([agentKp]);
+      const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+      await conn.confirmTransaction(sig, 'confirmed');
+      return sig;
+    });
+    // Fees land as SOL. Convert everything above the gas reserve to USDC and book it as revenue.
     const solAfter = await deps.chain.getSolBalance(agent.walletPubkey);
-    const swappable = Math.max(0, solAfter - CLAIM_GAS_KEEP_LAMPORTS);
+    const gained = solAfter - solBefore;                       // fees received minus the gas this claim cost
+    const swappable = Math.min(gained, Math.max(0, solAfter - CLAIM_GAS_KEEP_LAMPORTS));
     if (swappable < MIN_CLAIM_LAMPORTS) return { ok: true, bookedMicro: 0 };
     const { outAmount } = await withAgentSecret(deps.db, deps.config.keyEncryptionKey, agentId, (secret) =>
       deps.chain.swap(secret, SOL_MINT, deps.chain.usdcMint, swappable, deps.config.trading.slippageBps));
