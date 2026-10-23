@@ -11,3 +11,9 @@ data/
 coverage/
 .vite/
 apps/api/drizzle/meta/_journal.json.bak
+.claude/
+.vitest/
+*.tsbuildinfo
+*.pem
+*keypair*.json
+secrets/
